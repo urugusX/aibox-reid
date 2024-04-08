@@ -286,7 +286,7 @@ main (int argc, char *argv[])
         if (pos >= 0 && pos <= 3)
         {
             sprintf(pip + strlen(pip),
-                    "! kmssink bus-id=b0000000.v_mix plane-id=%d render-rectangle=\"<%d,%d,1920,1080>\" show-preroll-frame=false sync=%s can-scale=false"
+                    "! kmssink bus-id=b0000000.v_mix plane-id=%d render-rectangle=\"<%d,%d,960,540>\" show-preroll-frame=false sync=%s can-scale=false"
                     , 34+validsrc, pos%2*960, pos/2*540, std::string(srcenc)=="h265" && std::string(fr)!="30" ? "true" : "false" );
         }
         else
