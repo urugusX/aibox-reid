@@ -70,13 +70,106 @@ typedef struct _vvas_ms_roi {
 } vvas_ms_roi;
 
 static int parse_rect(VVASKernel * handle, int start,
+      VVASFrame * input[MAX_NUM_OBJECT], VVASFrame * output[MAX_NUM_OBJECT],
+      vvas_ms_roi &roi_data
+      )
+{
+    VVASFrame *inframe = input[0];
+    GstInferenceMeta *infer_meta = ((GstInferenceMeta *)gst_buffer_get_meta((GstBuffer *)
+                                                              inframe->app_priv,
+                                                          gst_inference_meta_api_get_type()));
+    roi_data.nobj = 0;
+    if (infer_meta == NULL)
+    {
+        return 0;
+    }
+
+    GstInferencePrediction *root = infer_meta->prediction;
+
+    /* Iterate through the immediate child predictions */
+    GSList *tmp = gst_inference_prediction_get_children(root);
+    for (GSList *child_predictions = tmp;
+         child_predictions;
+         child_predictions = g_slist_next(child_predictions))
+    {
+        GstInferencePrediction *child = (GstInferencePrediction *)child_predictions->data;
+
+        /* On each children, iterate through the different associated classes */
+        for (GList *classes = child->classifications;
+             classes; classes = g_list_next(classes))
+        {
+            GstInferenceClassification *classification = (GstInferenceClassification *)classes->data;
+            if (roi_data.nobj < MAX_CHANNELS)
+            {
+                int ind = roi_data.nobj;
+                struct _roi &roi = roi_data.roi[ind];
+                roi.y_cord = (uint32_t)child->bbox.y + child->bbox.y % 2;
+                roi.x_cord = (uint32_t)child->bbox.x;
+                roi.height = (uint32_t)child->bbox.height - child->bbox.height % 2;
+                roi.width = (uint32_t)child->bbox.width - child->bbox.width % 2;
+                roi.prob = classification->class_prob;
+                roi.prediction = child;
+                roi_data.nobj++;
+
+            }
+        }
+    }
+    g_slist_free(tmp);
+    return 0;
 }
 
 extern "C" {
 int32_t xlnx_kernel_init(VVASKernel *handle) {
+  json_t *jconfig = handle->kernel_config;
+  json_t *val; /* kernel config from app */
+
+  handle->is_multiprocess = 1;
+  ReidKernelPriv *kernel_priv =
+      (ReidKernelPriv *)calloc(1, sizeof(ReidKernelPriv));
+  if (!kernel_priv) {
+    printf("Error: Unable to allocate reID kernel memory\n");
+  }
+
+  /* parse config */
+  val = json_object_get(jconfig, "threshold");
+  if (!val || !json_is_number(val))
+    kernel_priv->threshold = DEFAULT_REID_THRESHOLD;
+  else
+    kernel_priv->threshold = json_number_value(val);
+
+  val = json_object_get(jconfig, "debug");
+  if (!val || !json_is_number(val))
+    kernel_priv->debug = DEFAULT_REID_DEBUG;
+  else
+    kernel_priv->debug = json_number_value(val);
+
+  val = json_object_get(jconfig, "model-name");
+  if (!val || !json_is_string (val))
+    kernel_priv->modelname = DEFAULT_MODEL_NAME;
+  else
+    kernel_priv->modelname = (char *) json_string_value (val);
+
+  val = json_object_get(jconfig, "model-path");
+  if (!val || !json_is_string (val))
+    kernel_priv->modelpath = DEFAULT_MODEL_PATH;
+  else
+    kernel_priv->modelpath = (char *) json_string_value (val);
+
+  std::string xmodelfile = kernel_priv->modelpath + "/" + kernel_priv->modelname + "/" + kernel_priv->modelname + ".xmodel";
+  kernel_priv->det = vitis::ai::Reid::create(xmodelfile);
+  if (kernel_priv->det.get() == NULL) {
+    printf("Error: Unable to create Reid runner with model %s.\n", xmodelfile.c_str());
+  }
+  kernel_priv->tracker = vitis::ai::ReidTracker::create();
+
+  handle->kernel_priv = (void *)kernel_priv;
+  return 0;
 }
 
 uint32_t xlnx_kernel_deinit(VVASKernel *handle) {
+  ReidKernelPriv *kernel_priv = (ReidKernelPriv *)handle->kernel_priv;
+  free(kernel_priv);
+  return 0;
 }
 
 int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
