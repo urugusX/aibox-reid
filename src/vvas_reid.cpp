@@ -208,7 +208,7 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
       std::cout << "Connected successfully." << std::endl;
   }
 
-  GstBuffer *buffer = (GstBuffer *)tcproi.prediction->sub_buffer; /* resized crop image*/
+  GstBuffer *buffer = (GstBuffer *)roi_data.roi[0].prediction.prediction->sub_buffer; /* resized crop image*/
   GstMapInfo info;
   gst_buffer_map(buffer, &info, GST_MAP_READ);
   GstVideoMeta *tcpmeta = gst_buffer_get_video_meta(buffer);
