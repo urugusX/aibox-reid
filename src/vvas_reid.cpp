@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-#include "gstinferencemeta.h"
-#include "vvas_kernel.h"
+#include <gst/vvas/gstinferencemeta.h>
+#include <vvas/vvas_kernel.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
-#include <opencv2/opencv.hpp> 
-#include "nnpp_reid.hpp"
-#include "reid.hpp"
-#include "reidtracker.hpp"
+#include <opencv2/opencv.hpp>
+#include <vitis/ai/nnpp/reid.hpp>
+#include <vitis/ai/reid.hpp>
+#include <vitis/ai/reidtracker.hpp>
 #include "common.hpp"
 #include <sstream>
 #include <iostream>
