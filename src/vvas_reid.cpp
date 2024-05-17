@@ -193,7 +193,6 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
 
   vvas_ms_roi roi_data;
   parse_rect(handle, start, input, output, roi_data);
-  struct _roi& tcproi = roi_data.roi;
 
   //tcp connect setting
   int sock = socket(AF_INET, SOCK_STREAM, 0);
@@ -245,11 +244,11 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
       send(sock, &converted_bbox_count, sizeof(converted_bbox_count), 0);
 
       for (uint32_t i = 0; i < roi_data.nobj; i++) {
-        uint32_t converted_x = htonl(tcproi[i].x_cord);
-        uint32_t converted_y = htonl(tcproi[i].y_cord);
-        uint32_t converted_width = htonl(tcproi[i].width);
-        uint32_t converted_height = htonl(tcproi[i].height);
-        std::cout << "x: " << tcproi[i].x_cord << ", y: " << tcproi[i].y_cord << ", width: " << tcproi[i].width << ", height: " << tcproi[i].height << std::endl;
+        uint32_t converted_x = htonl(roi_data.roi[i].x_cord);
+        uint32_t converted_y = htonl(roi_data.roi[i].y_cord);
+        uint32_t converted_width = htonl(roi_data.roi[i].width);
+        uint32_t converted_height = htonl(roi_data.roi[i].height);
+        std::cout << "x: " << roi_data.roi[i].x_cord << ", y: " << roi_data.roi[i].y_cord << ", width: " << roi_data.roi[i].width << ", height: " << roi_data.roi[i].height << std::endl;
 
         send(sock, &converted_x, sizeof(converted_x), 0);
         send(sock, &converted_y, sizeof(converted_y), 0);
