@@ -14,18 +14,18 @@
  * limitations under the License.
  */
 
-#include <gst/vvas/gstinferencemeta.h>
-#include <vvas/vvas_kernel.h>
+#include "gstinferencemeta.h"
+#include "vvas_kernel.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
-#include <opencv2/opencv.hpp>
-#include <vitis/ai/nnpp/reid.hpp>
-#include <vitis/ai/reid.hpp>
-#include <vitis/ai/reidtracker.hpp>
+#include <opencv2/opencv.hpp> 
+#include "nnpp_reid.hpp"
+#include "reid.hpp"
+#include "reidtracker.hpp"
 #include "common.hpp"
 #include <sstream>
 #include <iostream>
@@ -193,7 +193,9 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
 
   vvas_ms_roi roi_data;
   parse_rect(handle, start, input, output, roi_data);
+  struct _roi& tcproi = roi_data.roi;
 
+  //tcp connect setting
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   struct sockaddr_in serverAddress;
   serverAddress.sin_family = AF_INET;
@@ -207,7 +209,7 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
       std::cout << "Connected successfully." << std::endl;
   }
 
-  GstBuffer *buffer = (GstBuffer *)roi.prediction->sub_buffer; /* resized crop image*/
+  GstBuffer *buffer = (GstBuffer *)tcproi.prediction->sub_buffer; /* resized crop image*/
   GstMapInfo info;
   gst_buffer_map(buffer, &info, GST_MAP_READ);
   GstVideoMeta *tcpmeta = gst_buffer_get_video_meta(buffer);
@@ -238,18 +240,16 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
       send(sock, (char*)tcpfeat.data, tcpfeat.total() * tcpfeat.elemSize(), 0);
       std::cout << "Sending bytes: " << tcpfeat.total() * tcpfeat.elemSize() << std::endl;
 
-      struct _roi& roi = roi_data.roi;
-
       int bbox_count = roi_data.nobj;
       int converted_bbox_count = htonl(bbox_count);
       send(sock, &converted_bbox_count, sizeof(converted_bbox_count), 0);
 
       for (uint32_t i = 0; i < roi_data.nobj; i++) {
-        uint32_t converted_x = htonl(roi[i].x_cord);
-        uint32_t converted_y = htonl(roi[i].y_cord);
-        uint32_t converted_width = htonl(roi[i].width);
-        uint32_t converted_height = htonl(roi[i].height);
-        std::cout << "x: " << roi[i].x_cord << ", y: " << roi[i].y_cord << ", width: " << roi[i].width << ", height: " << roi[i].height << std::endl;
+        uint32_t converted_x = htonl(tcproi[i].x_cord);
+        uint32_t converted_y = htonl(tcproi[i].y_cord);
+        uint32_t converted_width = htonl(tcproi[i].width);
+        uint32_t converted_height = htonl(tcproi[i].height);
+        std::cout << "x: " << tcproi[i].x_cord << ", y: " << tcproi[i].y_cord << ", width: " << tcproi[i].width << ", height: " << tcproi[i].height << std::endl;
 
         send(sock, &converted_x, sizeof(converted_x), 0);
         send(sock, &converted_y, sizeof(converted_y), 0);
