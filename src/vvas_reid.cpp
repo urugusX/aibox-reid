@@ -14,20 +14,25 @@
  * limitations under the License.
  */
 
-#include <gst/vvas/gstinferencemeta.h>
-#include <vvas/vvas_kernel.h>
+#include "gstinferencemeta.h"
+#include "vvas_kernel.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
-#include <opencv2/opencv.hpp>
-#include <vitis/ai/nnpp/reid.hpp>
-#include <vitis/ai/reid.hpp>
-#include <vitis/ai/reidtracker.hpp>
+#include <opencv2/opencv.hpp> 
+#include "nnpp_reid.hpp"
+#include "reid.hpp"
+#include "reidtracker.hpp"
 #include "common.hpp"
 #include <sstream>
+#include <iostream>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
 
 #define MAX_REID 20
 #define DEFAULT_REID_THRESHOLD 0.2
@@ -189,6 +194,76 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
   vvas_ms_roi roi_data;
   parse_rect(handle, start, input, output, roi_data);
 
+  int sock = socket(AF_INET, SOCK_STREAM, 0);
+  struct sockaddr_in serverAddress;
+  serverAddress.sin_family = AF_INET;
+  serverAddress.sin_port = htons(1234);
+  serverAddress.sin_addr.s_addr = inet_addr("192.168.4.40");
+
+  if (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) {
+      std::cerr << "Connection failed." << std::endl;
+      return -1;
+  } else {
+      std::cout << "Connected successfully." << std::endl;
+  }
+
+  GstBuffer *buffer = (GstBuffer *)roi.prediction->sub_buffer; /* resized crop image*/
+  GstMapInfo info;
+  gst_buffer_map(buffer, &info, GST_MAP_READ);
+  GstVideoMeta *tcpmeta = gst_buffer_get_video_meta(buffer);
+  if (!tcpmeta) {
+      printf("ERROR: VVAS REID: video meta not present in buffer");
+    } else if (tcpmeta->width == 80 && tcpmeta->height == 176) {
+      char *tcpindata = (char *)info.data;
+      cv::Mat tcpimage(tcpmeta->height, tcpmeta->width, CV_8UC3, tcpindata);
+      auto tcpfeat = kernel_priv->det->run(tcpimage).feat;
+      
+      int type = tcpfeat.type();
+      int rows = tcpfeat.rows;
+      int cols = tcpfeat.cols;
+      int channels = tcpfeat.channels();
+
+      std::cout << "Type: " << type << ", Rows: " << rows << ", Cols: " << cols << ", Channels: " << channels << std::endl;
+
+      int converted_type = htonl(type);
+      int converted_rows = htonl(rows);
+      int converted_cols = htonl(cols);
+      int converted_channels = htonl(channels);
+
+      send(sock, &converted_type, sizeof(converted_type), 0);
+      send(sock, &converted_rows, sizeof(converted_rows), 0);
+      send(sock, &converted_cols, sizeof(converted_cols), 0);
+      send(sock, &converted_channels, sizeof(converted_channels), 0);
+
+      send(sock, (char*)tcpfeat.data, tcpfeat.total() * tcpfeat.elemSize(), 0);
+      std::cout << "Sending bytes: " << tcpfeat.total() * tcpfeat.elemSize() << std::endl;
+
+      struct _roi& roi = roi_data.roi;
+
+      int bbox_count = roi_data.nobj;
+      int converted_bbox_count = htonl(bbox_count);
+      send(sock, &converted_bbox_count, sizeof(converted_bbox_count), 0);
+
+      for (uint32_t i = 0; i < roi_data.nobj; i++) {
+        uint32_t converted_x = htonl(roi[i].x_cord);
+        uint32_t converted_y = htonl(roi[i].y_cord);
+        uint32_t converted_width = htonl(roi[i].width);
+        uint32_t converted_height = htonl(roi[i].height);
+        std::cout << "x: " << roi[i].x_cord << ", y: " << roi[i].y_cord << ", width: " << roi[i].width << ", height: " << roi[i].height << std::endl;
+
+        send(sock, &converted_x, sizeof(converted_x), 0);
+        send(sock, &converted_y, sizeof(converted_y), 0);
+        send(sock, &converted_width, sizeof(converted_width), 0);
+        send(sock, &converted_height, sizeof(converted_height), 0);
+      }
+      close(sock);
+
+    } else {
+      printf("ERROR: VVAS REID: Invalid resolution for reid (%u x %u)\n",
+            tcpmeta->width, tcpmeta->height);
+    }
+  gst_buffer_unmap(buffer, &info);
+
   m__TIC__(getfeat);
   for (uint32_t i = 0; i < roi_data.nobj; i++) {
     struct _roi& roi = roi_data.roi[i];
@@ -205,15 +280,9 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
       } else if (vmeta->width == 80 && vmeta->height == 176) {
         char *indata = (char *)info.data;
         cv::Mat image(vmeta->height, vmeta->width, CV_8UC3, indata);
-        auto input_box =
-            cv::Rect2f(roi.x_cord, roi.y_cord,
-                       roi.width, roi.height);
         m__TIC__(reidrun);
         auto feat = kernel_priv->det->run(image).feat;
         m__TOC__(reidrun);
-        m__TIC__(inputpush);
-        input_characts.emplace_back(feat, input_box, roi.prob, -1, i);
-        m__TOC__(inputpush);
         if (kernel_priv->debug == 2) {
             printf("Tracker input: Frame %d: obj_ind %d, xmin %u, ymin %u, xmax %u, ymax %u, prob: %f\n",
                     frame_num, i, roi.x_cord, roi.y_cord,
@@ -228,43 +297,6 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
     }
   }
   m__TOC__(getfeat);
-  if (input_characts.size() > 0)
-  {
-  std::vector<vitis::ai::ReidTracker::OutputCharact> track_results =
-      std::vector<vitis::ai::ReidTracker::OutputCharact>(
-          kernel_priv->tracker->track(frame_num, input_characts, true, true));
-  if (kernel_priv->debug) {
-      printf("Tracker result: \n");
-  }
-  int i = 0;
-  for (auto &r : track_results) {
-    auto box = get<1>(r);
-    gint tmpx = box.x, tmpy = box.y;
-    guint tmpw = box.width, tmph = box.height;
-    uint64_t gid = get<0>(r);
-    if (kernel_priv->debug) {
-      printf("Frame %d: %" PRIu64 ", xmin %d, ymin %d, w %u, h %u\n",
-         frame_num, gid,
-         tmpx, tmpy,
-         tmpw, tmph);
-    }
-
-    struct _roi& roi = roi_data.roi[i];
-    roi_data.roi[i].prediction->bbox.x = tmpx;
-    roi_data.roi[i].prediction->bbox.y = tmpy;
-    roi_data.roi[i].prediction->bbox.width = tmpw;
-    roi_data.roi[i].prediction->bbox.height = tmph;
-    roi_data.roi[i].prediction->reserved_1 = (void*)gid;
-    roi_data.roi[i].prediction->reserved_2 = (void*)1;
-
-    i++;
-  }
-
-  for (; i < roi_data.nobj; i++)
-  {
-    roi_data.roi[i].prediction->reserved_2 = (void*)-1;
-  }
-  }
   return 0;
 }
 
