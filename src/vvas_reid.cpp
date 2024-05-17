@@ -14,25 +14,20 @@
  * limitations under the License.
  */
 
-#include "gstinferencemeta.h"
-#include "vvas_kernel.h"
+#include <gst/vvas/gstinferencemeta.h>
+#include <vvas/vvas_kernel.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
-#include <opencv2/opencv.hpp> 
-#include "nnpp_reid.hpp"
-#include "reid.hpp"
-#include "reidtracker.hpp"
+#include <opencv2/opencv.hpp>
+#include <vitis/ai/nnpp/reid.hpp>
+#include <vitis/ai/reid.hpp>
+#include <vitis/ai/reidtracker.hpp>
 #include "common.hpp"
 #include <sstream>
-#include <iostream>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
 
 #define MAX_REID 20
 #define DEFAULT_REID_THRESHOLD 0.2
@@ -75,106 +70,13 @@ typedef struct _vvas_ms_roi {
 } vvas_ms_roi;
 
 static int parse_rect(VVASKernel * handle, int start,
-      VVASFrame * input[MAX_NUM_OBJECT], VVASFrame * output[MAX_NUM_OBJECT],
-      vvas_ms_roi &roi_data
-      )
-{
-    VVASFrame *inframe = input[0];
-    GstInferenceMeta *infer_meta = ((GstInferenceMeta *)gst_buffer_get_meta((GstBuffer *)
-                                                              inframe->app_priv,
-                                                          gst_inference_meta_api_get_type()));
-    roi_data.nobj = 0;
-    if (infer_meta == NULL)
-    {
-        return 0;
-    }
-
-    GstInferencePrediction *root = infer_meta->prediction;
-
-    /* Iterate through the immediate child predictions */
-    GSList *tmp = gst_inference_prediction_get_children(root);
-    for (GSList *child_predictions = tmp;
-         child_predictions;
-         child_predictions = g_slist_next(child_predictions))
-    {
-        GstInferencePrediction *child = (GstInferencePrediction *)child_predictions->data;
-
-        /* On each children, iterate through the different associated classes */
-        for (GList *classes = child->classifications;
-             classes; classes = g_list_next(classes))
-        {
-            GstInferenceClassification *classification = (GstInferenceClassification *)classes->data;
-            if (roi_data.nobj < MAX_CHANNELS)
-            {
-                int ind = roi_data.nobj;
-                struct _roi &roi = roi_data.roi[ind];
-                roi.y_cord = (uint32_t)child->bbox.y + child->bbox.y % 2;
-                roi.x_cord = (uint32_t)child->bbox.x;
-                roi.height = (uint32_t)child->bbox.height - child->bbox.height % 2;
-                roi.width = (uint32_t)child->bbox.width - child->bbox.width % 2;
-                roi.prob = classification->class_prob;
-                roi.prediction = child;
-                roi_data.nobj++;
-
-            }
-        }
-    }
-    g_slist_free(tmp);
-    return 0;
 }
 
 extern "C" {
 int32_t xlnx_kernel_init(VVASKernel *handle) {
-  json_t *jconfig = handle->kernel_config;
-  json_t *val; /* kernel config from app */
-
-  handle->is_multiprocess = 1;
-  ReidKernelPriv *kernel_priv =
-      (ReidKernelPriv *)calloc(1, sizeof(ReidKernelPriv));
-  if (!kernel_priv) {
-    printf("Error: Unable to allocate reID kernel memory\n");
-  }
-
-  /* parse config */
-  val = json_object_get(jconfig, "threshold");
-  if (!val || !json_is_number(val))
-    kernel_priv->threshold = DEFAULT_REID_THRESHOLD;
-  else
-    kernel_priv->threshold = json_number_value(val);
-
-  val = json_object_get(jconfig, "debug");
-  if (!val || !json_is_number(val))
-    kernel_priv->debug = DEFAULT_REID_DEBUG;
-  else
-    kernel_priv->debug = json_number_value(val);
-
-  val = json_object_get(jconfig, "model-name");
-  if (!val || !json_is_string (val))
-    kernel_priv->modelname = DEFAULT_MODEL_NAME;
-  else
-    kernel_priv->modelname = (char *) json_string_value (val);
-
-  val = json_object_get(jconfig, "model-path");
-  if (!val || !json_is_string (val))
-    kernel_priv->modelpath = DEFAULT_MODEL_PATH;
-  else
-    kernel_priv->modelpath = (char *) json_string_value (val);
-
-  std::string xmodelfile = kernel_priv->modelpath + "/" + kernel_priv->modelname + "/" + kernel_priv->modelname + ".xmodel";
-  kernel_priv->det = vitis::ai::Reid::create(xmodelfile);
-  if (kernel_priv->det.get() == NULL) {
-    printf("Error: Unable to create Reid runner with model %s.\n", xmodelfile.c_str());
-  }
-  kernel_priv->tracker = vitis::ai::ReidTracker::create();
-
-  handle->kernel_priv = (void *)kernel_priv;
-  return 0;
 }
 
 uint32_t xlnx_kernel_deinit(VVASKernel *handle) {
-  ReidKernelPriv *kernel_priv = (ReidKernelPriv *)handle->kernel_priv;
-  free(kernel_priv);
-  return 0;
 }
 
 int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
@@ -194,76 +96,6 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
   vvas_ms_roi roi_data;
   parse_rect(handle, start, input, output, roi_data);
 
-  int sock = socket(AF_INET, SOCK_STREAM, 0);
-  struct sockaddr_in serverAddress;
-  serverAddress.sin_family = AF_INET;
-  serverAddress.sin_port = htons(1234);
-  serverAddress.sin_addr.s_addr = inet_addr("192.168.4.40");
-
-  if (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) {
-      std::cerr << "Connection failed." << std::endl;
-      return -1;
-  } else {
-      std::cout << "Connected successfully." << std::endl;
-  }
-
-  GstBuffer *buffer = (GstBuffer *)roi.prediction->sub_buffer; /* resized crop image*/
-  GstMapInfo info;
-  gst_buffer_map(buffer, &info, GST_MAP_READ);
-  GstVideoMeta *tcpmeta = gst_buffer_get_video_meta(buffer);
-  if (!tcpmeta) {
-      printf("ERROR: VVAS REID: video meta not present in buffer");
-    } else if (tcpmeta->width == 80 && tcpmeta->height == 176) {
-      char *tcpindata = (char *)info.data;
-      cv::Mat tcpimage(tcpmeta->height, tcpmeta->width, CV_8UC3, tcpindata);
-      auto tcpfeat = kernel_priv->det->run(tcpimage).feat;
-      
-      int type = tcpfeat.type();
-      int rows = tcpfeat.rows;
-      int cols = tcpfeat.cols;
-      int channels = tcpfeat.channels();
-
-      std::cout << "Type: " << type << ", Rows: " << rows << ", Cols: " << cols << ", Channels: " << channels << std::endl;
-
-      int converted_type = htonl(type);
-      int converted_rows = htonl(rows);
-      int converted_cols = htonl(cols);
-      int converted_channels = htonl(channels);
-
-      send(sock, &converted_type, sizeof(converted_type), 0);
-      send(sock, &converted_rows, sizeof(converted_rows), 0);
-      send(sock, &converted_cols, sizeof(converted_cols), 0);
-      send(sock, &converted_channels, sizeof(converted_channels), 0);
-
-      send(sock, (char*)tcpfeat.data, tcpfeat.total() * tcpfeat.elemSize(), 0);
-      std::cout << "Sending bytes: " << tcpfeat.total() * tcpfeat.elemSize() << std::endl;
-
-      struct _roi& roi = roi_data.roi;
-
-      int bbox_count = roi_data.nobj;
-      int converted_bbox_count = htonl(bbox_count);
-      send(sock, &converted_bbox_count, sizeof(converted_bbox_count), 0);
-
-      for (uint32_t i = 0; i < roi_data.nobj; i++) {
-        uint32_t converted_x = htonl(roi[i].x_cord);
-        uint32_t converted_y = htonl(roi[i].y_cord);
-        uint32_t converted_width = htonl(roi[i].width);
-        uint32_t converted_height = htonl(roi[i].height);
-        std::cout << "x: " << roi[i].x_cord << ", y: " << roi[i].y_cord << ", width: " << roi[i].width << ", height: " << roi[i].height << std::endl;
-
-        send(sock, &converted_x, sizeof(converted_x), 0);
-        send(sock, &converted_y, sizeof(converted_y), 0);
-        send(sock, &converted_width, sizeof(converted_width), 0);
-        send(sock, &converted_height, sizeof(converted_height), 0);
-      }
-      close(sock);
-
-    } else {
-      printf("ERROR: VVAS REID: Invalid resolution for reid (%u x %u)\n",
-            tcpmeta->width, tcpmeta->height);
-    }
-  gst_buffer_unmap(buffer, &info);
-
   m__TIC__(getfeat);
   for (uint32_t i = 0; i < roi_data.nobj; i++) {
     struct _roi& roi = roi_data.roi[i];
@@ -280,9 +112,15 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
       } else if (vmeta->width == 80 && vmeta->height == 176) {
         char *indata = (char *)info.data;
         cv::Mat image(vmeta->height, vmeta->width, CV_8UC3, indata);
+        auto input_box =
+            cv::Rect2f(roi.x_cord, roi.y_cord,
+                       roi.width, roi.height);
         m__TIC__(reidrun);
         auto feat = kernel_priv->det->run(image).feat;
         m__TOC__(reidrun);
+        m__TIC__(inputpush);
+        input_characts.emplace_back(feat, input_box, roi.prob, -1, i);
+        m__TOC__(inputpush);
         if (kernel_priv->debug == 2) {
             printf("Tracker input: Frame %d: obj_ind %d, xmin %u, ymin %u, xmax %u, ymax %u, prob: %f\n",
                     frame_num, i, roi.x_cord, roi.y_cord,
@@ -297,6 +135,43 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
     }
   }
   m__TOC__(getfeat);
+  if (input_characts.size() > 0)
+  {
+  std::vector<vitis::ai::ReidTracker::OutputCharact> track_results =
+      std::vector<vitis::ai::ReidTracker::OutputCharact>(
+          kernel_priv->tracker->track(frame_num, input_characts, true, true));
+  if (kernel_priv->debug) {
+      printf("Tracker result: \n");
+  }
+  int i = 0;
+  for (auto &r : track_results) {
+    auto box = get<1>(r);
+    gint tmpx = box.x, tmpy = box.y;
+    guint tmpw = box.width, tmph = box.height;
+    uint64_t gid = get<0>(r);
+    if (kernel_priv->debug) {
+      printf("Frame %d: %" PRIu64 ", xmin %d, ymin %d, w %u, h %u\n",
+         frame_num, gid,
+         tmpx, tmpy,
+         tmpw, tmph);
+    }
+
+    struct _roi& roi = roi_data.roi[i];
+    roi_data.roi[i].prediction->bbox.x = tmpx;
+    roi_data.roi[i].prediction->bbox.y = tmpy;
+    roi_data.roi[i].prediction->bbox.width = tmpw;
+    roi_data.roi[i].prediction->bbox.height = tmph;
+    roi_data.roi[i].prediction->reserved_1 = (void*)gid;
+    roi_data.roi[i].prediction->reserved_2 = (void*)1;
+
+    i++;
+  }
+
+  for (; i < roi_data.nobj; i++)
+  {
+    roi_data.roi[i].prediction->reserved_2 = (void*)-1;
+  }
+  }
   return 0;
 }
 
