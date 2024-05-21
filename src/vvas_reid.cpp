@@ -190,7 +190,7 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
   frame_num++;
   std::vector<vitis::ai::ReidTracker::InputCharact> input_characts;
   /* get metadata from input */
-  Mat tcpimage(input[0]->props.height, input[0]->props.width, CV_8UC3, (char *)in_vvas_frame->vaddr[0]);
+  cv::Mat tcpimage(input[0]->props.height, input[0]->props.width, CV_8UC3, (char *)in_vvas_frame->vaddr[0]);
 
   vvas_ms_roi roi_data;
   parse_rect(handle, start, input, output, roi_data);
