@@ -216,8 +216,8 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
       printf("ERROR: VVAS REID: video meta not present in buffer");
     } else if (tcpmeta->width == 80 && tcpmeta->height == 176) {
       char *tcpindata = (char *)info.data;
-      cv::Mat tcpimage(tcpmeta->height, tcpmeta->width, CV_8UC3, tcpindata);
-      auto tcpfeat = kernel_priv->det->run(tcpimage).feat;
+      cv::Mat tcpfeat(tcpmeta->height, tcpmeta->width, CV_8UC3, tcpindata);
+      //auto tcpfeat = kernel_priv->det->run(tcpimage).feat;
       
       int type = tcpfeat.type();
       int rows = tcpfeat.rows;
