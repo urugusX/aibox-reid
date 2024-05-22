@@ -33,6 +33,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <chrono>
 
 #define MAX_REID 20
 #define DEFAULT_REID_THRESHOLD 0.2
@@ -190,6 +191,7 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
   frame_num++;
   std::vector<vitis::ai::ReidTracker::InputCharact> input_characts;
   /* get metadata from input */
+  cv::Mat tcpimage(input[0]->props.height, input[0]->props.width, CV_8UC3, (char *)in_vvas_frame->vaddr[0]);
 
   vvas_ms_roi roi_data;
   parse_rect(handle, start, input, output, roi_data);
@@ -207,61 +209,53 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
   } else {
       std::cout << "Connected successfully." << std::endl;
   }
+  
+  auto start = std::chrono::high_resolution_clock::now();
+  std::cout << "Sending started at: " << std::chrono::duration_cast<std::chrono::milliseconds>(start.time_since_epoch()).count() << " ms" << std::endl;
 
-  GstBuffer *buffer = (GstBuffer *)roi_data.roi[0].prediction->sub_buffer; /* resized crop image*/
-  GstMapInfo info;
-  gst_buffer_map(buffer, &info, GST_MAP_READ);
-  GstVideoMeta *tcpmeta = gst_buffer_get_video_meta(buffer);
-  if (!tcpmeta) {
-      printf("ERROR: VVAS REID: video meta not present in buffer");
-    } else if (tcpmeta->width == 80 && tcpmeta->height == 176) {
-      char *tcpindata = (char *)info.data;
-      cv::Mat tcpfeat(tcpmeta->height, tcpmeta->width, CV_8UC3, tcpindata);
-      //auto tcpfeat = kernel_priv->det->run(tcpimage).feat;
-      
-      int type = tcpfeat.type();
-      int rows = tcpfeat.rows;
-      int cols = tcpfeat.cols;
-      int channels = tcpfeat.channels();
+  int type = tcpimage.type();
+  int rows = tcpimage.rows;
+  int cols = tcpimage.cols;
+  int channels = tcpimage.channels();
 
-      std::cout << "Type: " << type << ", Rows: " << rows << ", Cols: " << cols << ", Channels: " << channels << std::endl;
+  std::cout << "Type: " << type << ", Rows: " << rows << ", Cols: " << cols << ", Channels: " << channels << std::endl;
 
-      int converted_type = htonl(type);
-      int converted_rows = htonl(rows);
-      int converted_cols = htonl(cols);
-      int converted_channels = htonl(channels);
+  int converted_type = htonl(type);
+  int converted_rows = htonl(rows);
+  int converted_cols = htonl(cols);
+  int converted_channels = htonl(channels);
 
-      send(sock, &converted_type, sizeof(converted_type), 0);
-      send(sock, &converted_rows, sizeof(converted_rows), 0);
-      send(sock, &converted_cols, sizeof(converted_cols), 0);
-      send(sock, &converted_channels, sizeof(converted_channels), 0);
+  send(sock, &converted_type, sizeof(converted_type), 0);
+  send(sock, &converted_rows, sizeof(converted_rows), 0);
+  send(sock, &converted_cols, sizeof(converted_cols), 0);
+  send(sock, &converted_channels, sizeof(converted_channels), 0);
 
-      send(sock, (char*)tcpfeat.data, tcpfeat.total() * tcpfeat.elemSize(), 0);
-      std::cout << "Sending bytes: " << tcpfeat.total() * tcpfeat.elemSize() << std::endl;
+  send(sock, (char*)tcpimage.data, tcpimage.total() * tcpimage.elemSize(), 0);
+  std::cout << "Sending bytes: " << tcpimage.total() * tcpimage.elemSize() << std::endl;
 
-      int bbox_count = roi_data.nobj;
-      int converted_bbox_count = htonl(bbox_count);
-      send(sock, &converted_bbox_count, sizeof(converted_bbox_count), 0);
+  int bbox_count = roi_data.nobj;
+  int converted_bbox_count = htonl(bbox_count);
+  send(sock, &converted_bbox_count, sizeof(converted_bbox_count), 0);
 
-      for (uint32_t i = 0; i < roi_data.nobj; i++) {
-        uint32_t converted_x = htonl(roi_data.roi[i].x_cord);
-        uint32_t converted_y = htonl(roi_data.roi[i].y_cord);
-        uint32_t converted_width = htonl(roi_data.roi[i].width);
-        uint32_t converted_height = htonl(roi_data.roi[i].height);
-        std::cout << "x: " << roi_data.roi[i].x_cord << ", y: " << roi_data.roi[i].y_cord << ", width: " << roi_data.roi[i].width << ", height: " << roi_data.roi[i].height << std::endl;
+  for (uint32_t i = 0; i < roi_data.nobj; i++) {
+    uint32_t converted_x = htonl(roi_data.roi[i].x_cord);
+    uint32_t converted_y = htonl(roi_data.roi[i].y_cord);
+    uint32_t converted_width = htonl(roi_data.roi[i].width);
+    uint32_t converted_height = htonl(roi_data.roi[i].height);
+    std::cout << "x: " << roi_data.roi[i].x_cord << ", y: " << roi_data.roi[i].y_cord << ", width: " << roi_data.roi[i].width << ", height: " << roi_data.roi[i].height << std::endl;
 
-        send(sock, &converted_x, sizeof(converted_x), 0);
-        send(sock, &converted_y, sizeof(converted_y), 0);
-        send(sock, &converted_width, sizeof(converted_width), 0);
-        send(sock, &converted_height, sizeof(converted_height), 0);
-      }
-      close(sock);
+    send(sock, &converted_x, sizeof(converted_x), 0);
+    send(sock, &converted_y, sizeof(converted_y), 0);
+    send(sock, &converted_width, sizeof(converted_width), 0);
+    send(sock, &converted_height, sizeof(converted_height), 0);
+  }
 
-    } else {
-      printf("ERROR: VVAS REID: Invalid resolution for reid (%u x %u)\n",
-            tcpmeta->width, tcpmeta->height);
-    }
-  gst_buffer_unmap(buffer, &info);
+  auto finish = std::chrono::high_resolution_clock::now();
+  std::cout << "Sending completed at: " << std::chrono::duration_cast<std::chrono::milliseconds>(finish.time_since_epoch()).count() << " ms" << std::endl;
+
+  std::chrono::duration<double, std::milli> elapsed = finish - start;
+  std::cout << "Elapsed time: " << elapsed.count() << " ms\n";
+  close(sock);
 
   m__TIC__(getfeat);
   for (uint32_t i = 0; i < roi_data.nobj; i++) {
