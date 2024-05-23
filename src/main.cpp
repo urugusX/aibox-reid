@@ -261,7 +261,7 @@ main (int argc, char *argv[])
                 ! vvas_xmultisrc kconfig=\"%s/ped_pp.json\" \
                 ! queue ! vvas_xfilter name=refinedet_%d kernels-config=\"%s/refinedet.json\" \
                 ! queue ! vvas_xfilter name=crop_%d      kernels-config=\"%s/crop.json\" \
-                ! queue ! vvas_xfilter kernels-config=\"%s/reid.json\" \
+                ! queue ! vvas_xfilter kernels-config=\"%s/reid_%d.json\" \
                 ! queue ! scalem%d.sink_master vvas_xmetaaffixer name=scalem%d scalem%d.src_master \
                 ! fakesink \
                 t%d.src_1 \
@@ -275,7 +275,7 @@ main (int argc, char *argv[])
                 , confdir.c_str()
                 , i, confdir.c_str()
                 , i, confdir.c_str()
-                , confdir.c_str()
+                , confdir.c_str(), i
                 , i, i, i
                 , i
                 , i, i
@@ -287,7 +287,7 @@ main (int argc, char *argv[])
         {
             sprintf(pip + strlen(pip),
                     "! kmssink bus-id=b0000000.v_mix plane-id=%d render-rectangle=\"<%d,%d,1920,1080>\" show-preroll-frame=false sync=%s can-scale=false"
-                    , 34+validsrc, pos%2*1920, pos/2*1080, std::string(srcenc)=="h265" && std::string(fr)!="30" ? "true" : "false" );
+                    , 34+validsrc, pos%2*960, pos/2*1080, std::string(srcenc)=="h265" && std::string(fr)!="30" ? "true" : "false" );
         }
         else
         {
