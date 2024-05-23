@@ -87,7 +87,8 @@ install(FILES
     config/ped_pp.json
     config/refinedet.json
     config/crop.json
-    config/reid.json
+    config/reid_0.json
+    config/reid_1.json
     config/draw_reid.json
     DESTINATION ${INSTALL_PATH}/share/vvas/)
 
