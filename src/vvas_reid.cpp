@@ -152,9 +152,9 @@ int32_t xlnx_kernel_init(VVASKernel *handle) {
 
   val = json_object_get(jconfig, "port");
   if (!val || !json_is_number(val))
-    kernel_priv->debug = DEFAULT_REID_DEBUG;
+    kernel_priv->port = DEFAULT_REID_PORT;
   else
-    kernel_priv->debug = json_number_value(val);
+    kernel_priv->port = json_number_value(val);
 
   val = json_object_get(jconfig, "model-name");
   if (!val || !json_is_string (val))
