@@ -287,7 +287,7 @@ main (int argc, char *argv[])
         {
             sprintf(pip + strlen(pip),
                     "! kmssink bus-id=b0000000.v_mix plane-id=%d render-rectangle=\"<%d,%d,1920,1080>\" show-preroll-frame=false sync=%s can-scale=false"
-                    , 34+validsrc, pos%2*1920, pos/2*1080, std::string(srcenc)=="h265" && std::string(fr)!="30" ? "true" : "false" );
+                    , 34+validsrc, pos%2*960, pos/2*1080, std::string(srcenc)=="h265" && std::string(fr)!="30" ? "true" : "false" );
         }
         else
         {
