@@ -37,6 +37,7 @@
 #define MAX_REID 20
 #define DEFAULT_REID_THRESHOLD 0.2
 #define DEFAULT_REID_DEBUG     0
+#define DEFAULT_REID_PORT     1234
 #define DEFAULT_MODEL_NAME     "personreid-res18_pt"
 #define DEFAULT_MODEL_PATH     "/opt/xilinx/kv260-aibox-reid/share/vitis_ai_library/models"
 
@@ -52,6 +53,7 @@ struct _Face {
 
 typedef struct _kern_priv {
   uint32_t debug;
+  uint32_t port;
   double threshold;
   std::string modelpath;
   std::string modelname;
@@ -148,6 +150,12 @@ int32_t xlnx_kernel_init(VVASKernel *handle) {
   else
     kernel_priv->debug = json_number_value(val);
 
+  val = json_object_get(jconfig, "port");
+  if (!val || !json_is_number(val))
+    kernel_priv->port = DEFAULT_REID_DEBUG;
+  else
+    kernel_priv->port = json_number_value(val);
+
   val = json_object_get(jconfig, "model-name");
   if (!val || !json_is_string (val))
     kernel_priv->modelname = DEFAULT_MODEL_NAME;
@@ -199,7 +207,7 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   struct sockaddr_in serverAddress;
   serverAddress.sin_family = AF_INET;
-  serverAddress.sin_port = htons(1234);
+  serverAddress.sin_port = htons(kernel_priv->port);
   serverAddress.sin_addr.s_addr = inet_addr("192.168.4.131");
 
   if (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) {
@@ -245,6 +253,7 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
     send(sock, &converted_width, sizeof(converted_width), 0);
     send(sock, &converted_height, sizeof(converted_height), 0);
   }
+
   close(sock);
 
   m__TIC__(getfeat);
