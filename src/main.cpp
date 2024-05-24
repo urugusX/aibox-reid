@@ -282,7 +282,7 @@ main (int argc, char *argv[])
                 , confdir.c_str()
                 , perf
                );
-
+        std::cout << pip << std::endl;
         if (pos >= 0 && pos <= 3)
         {
             sprintf(pip + strlen(pip),
