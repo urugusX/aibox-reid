@@ -321,6 +321,8 @@ extern "C"
     VVASFrame *inframe = input[0];
     vvas_xoverlaypriv *kpriv = (vvas_xoverlaypriv *)handle->kernel_priv;
 
+    std::cout << "height: "<< input[0]->props.height << ", width: "<< input[0]->props.width << ", stride: " << input[0]->props.stride << endl;
+    
     if (inframe->props.fmt == VVAS_VFMT_Y_UV8_420)
     {
       LOG_MESSAGE(LOG_LEVEL_DEBUG, "Input frame is in NV12 format\n");
