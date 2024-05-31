@@ -321,7 +321,7 @@ extern "C"
     VVASFrame *inframe = input[0];
     vvas_xoverlaypriv *kpriv = (vvas_xoverlaypriv *)handle->kernel_priv;
 
-    std::cout << "height: "<< input[0]->props.height << ", width: "<< input[0]->props.width << ", stride: " << input[0]->props.stride << endl;
+    //std::cout << "height: "<< input[0]->props.height << ", width: "<< input[0]->props.width << ", stride: " << input[0]->props.stride << endl;
     
     if (inframe->props.fmt == VVAS_VFMT_Y_UV8_420)
     {
