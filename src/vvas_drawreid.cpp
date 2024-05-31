@@ -110,7 +110,7 @@ static void DrawReID( VVASFrame *inframe, vvas_xoverlaypriv *kpriv,
 {
   /* Check whether the frame is NV12 or BGR and act accordingly */
   char label_s[256] = "person";
-  sprintf(label_s, "%lu", lable);
+  //sprintf(label_s, "%lu", lable);
   std::string label_string(label_s);
 
   if (inframe->props.fmt == VVAS_VFMT_Y_UV8_420)
