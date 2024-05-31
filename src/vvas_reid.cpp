@@ -212,7 +212,6 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
 
   if (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) {
       std::cerr << "Connection failed." << std::endl;
-      continue;
   } else {
       std::cout << "Connected successfully." << std::endl;
 
