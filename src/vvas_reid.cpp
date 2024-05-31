@@ -209,51 +209,51 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
   serverAddress.sin_family = AF_INET;
   serverAddress.sin_port = htons(kernel_priv->port);
   serverAddress.sin_addr.s_addr = inet_addr("192.168.4.131");
-
-  		
+	
   if (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) {
       std::cerr << "Connection failed." << std::endl;
+      return -1;
   } else {
       std::cout << "Connected successfully." << std::endl;
-
-      int type = tcpimage.type();
-      int rows = tcpimage.rows;
-      int cols = tcpimage.cols;
-      int channels = tcpimage.channels();
-
-      std::cout << "Type: " << type << ", Rows: " << rows << ", Cols: " << cols << ", Channels: " << channels << std::endl;
-
-      int converted_type = htonl(type);
-      int converted_rows = htonl(rows);
-      int converted_cols = htonl(cols);
-      int converted_channels = htonl(channels);
-
-      send(sock, &converted_type, sizeof(converted_type), 0);
-      send(sock, &converted_rows, sizeof(converted_rows), 0);
-      send(sock, &converted_cols, sizeof(converted_cols), 0);
-      send(sock, &converted_channels, sizeof(converted_channels), 0);
-
-      send(sock, (char*)tcpimage.data, tcpimage.total() * tcpimage.elemSize(), 0);
-      std::cout << "Sending bytes: " << tcpimage.total() * tcpimage.elemSize() << std::endl;
-
-      int bbox_count = roi_data.nobj;
-      int converted_bbox_count = htonl(bbox_count);
-      send(sock, &converted_bbox_count, sizeof(converted_bbox_count), 0);
-
-      for (uint32_t i = 0; i < roi_data.nobj; i++) {
-        uint32_t converted_x = htonl(roi_data.roi[i].x_cord);
-        uint32_t converted_y = htonl(roi_data.roi[i].y_cord);
-        uint32_t converted_width = htonl(roi_data.roi[i].width);
-        uint32_t converted_height = htonl(roi_data.roi[i].height);
-        std::cout << "x: " << roi_data.roi[i].x_cord << ", y: " << roi_data.roi[i].y_cord << ", width: " << roi_data.roi[i].width << ", height: " << roi_data.roi[i].height << std::endl;
-
-        send(sock, &converted_x, sizeof(converted_x), 0);
-        send(sock, &converted_y, sizeof(converted_y), 0);
-        send(sock, &converted_width, sizeof(converted_width), 0);
-        send(sock, &converted_height, sizeof(converted_height), 0);
-      }
   }
   
+  int type = tcpimage.type();
+  int rows = tcpimage.rows;
+  int cols = tcpimage.cols;
+  int channels = tcpimage.channels();
+
+  std::cout << "Type: " << type << ", Rows: " << rows << ", Cols: " << cols << ", Channels: " << channels << std::endl;
+
+  int converted_type = htonl(type);
+  int converted_rows = htonl(rows);
+  int converted_cols = htonl(cols);
+  int converted_channels = htonl(channels);
+
+  send(sock, &converted_type, sizeof(converted_type), 0);
+  send(sock, &converted_rows, sizeof(converted_rows), 0);
+  send(sock, &converted_cols, sizeof(converted_cols), 0);
+  send(sock, &converted_channels, sizeof(converted_channels), 0);
+
+  send(sock, (char*)tcpimage.data, tcpimage.total() * tcpimage.elemSize(), 0);
+  std::cout << "Sending bytes: " << tcpimage.total() * tcpimage.elemSize() << std::endl;
+
+  int bbox_count = roi_data.nobj;
+  int converted_bbox_count = htonl(bbox_count);
+  send(sock, &converted_bbox_count, sizeof(converted_bbox_count), 0);
+
+  for (uint32_t i = 0; i < roi_data.nobj; i++) {
+    uint32_t converted_x = htonl(roi_data.roi[i].x_cord);
+    uint32_t converted_y = htonl(roi_data.roi[i].y_cord);
+    uint32_t converted_width = htonl(roi_data.roi[i].width);
+    uint32_t converted_height = htonl(roi_data.roi[i].height);
+    std::cout << "x: " << roi_data.roi[i].x_cord << ", y: " << roi_data.roi[i].y_cord << ", width: " << roi_data.roi[i].width << ", height: " << roi_data.roi[i].height << std::endl;
+
+    send(sock, &converted_x, sizeof(converted_x), 0);
+    send(sock, &converted_y, sizeof(converted_y), 0);
+    send(sock, &converted_width, sizeof(converted_width), 0);
+    send(sock, &converted_height, sizeof(converted_height), 0);
+  }
+
   close(sock);
 
   m__TIC__(getfeat);
