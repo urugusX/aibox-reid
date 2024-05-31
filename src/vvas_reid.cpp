@@ -210,6 +210,7 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
   serverAddress.sin_port = htons(kernel_priv->port);
   serverAddress.sin_addr.s_addr = inet_addr("192.168.4.131");
 
+  		
   if (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) {
       std::cerr << "Connection failed." << std::endl;
   } else {
