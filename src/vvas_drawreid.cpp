@@ -411,13 +411,13 @@ extern "C"
 
     for (int i = 0; i < input[0]->props.height / 2; ++i) {
         for (int j = 0; j < input[0]->props.stride / 2; ++j) {
-            u.at<uchar>(i, j) = chromaImg.at<Vec2s>(i, j)[0];
-            v.at<uchar>(i, j) = chromaImg.at<Vec2s>(i, j)[1];
+            u.at<uchar>(i, j) = chromaImg.at<Vec2s>(i, j)[0] / 256;
+            v.at<uchar>(i, j) = chromaImg.at<Vec2s>(i, j)[1] / 256;
         }
     }
 
-    resize(u, u, Size(lumaImg.cols, lumaImg.rows));
-    resize(v, v, Size(lumaImg.cols, lumaImg.rows));
+    resize(u, u, Size(lumaImg.cols, lumaImg.rows), 0, 0, INTER_LINEAR);
+    resize(v, v, Size(lumaImg.cols, lumaImg.rows), 0, 0, INTER_LINEAR);
 
     std::vector<Mat> yuv_channels = {lumaImg, u, v};
     Mat yuvImg;
