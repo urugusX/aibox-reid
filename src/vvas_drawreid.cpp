@@ -18,6 +18,7 @@
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/opencv.hpp>
 #include <iostream>
 #include <math.h>
 #include <vvas/vvas_kernel.h>
@@ -408,8 +409,8 @@ extern "C"
     Mat u(input[0]->props.height / 2, input[0]->props.stride / 2, CV_8UC1);
     Mat v(input[0]->props.height / 2, input[0]->props.stride / 2, CV_8UC1);
 
-    for (int i = 0; i < height / 2; ++i) {
-        for (int j = 0; j < stride / 2; ++j) {
+    for (int i = 0; i < input[0]->props.height / 2; ++i) {
+        for (int j = 0; j < input[0]->props.stride / 2; ++j) {
             u.at<uchar>(i, j) = chromaImg.at<Vec2s>(i, j)[0];
             v.at<uchar>(i, j) = chromaImg.at<Vec2s>(i, j)[1];
         }
