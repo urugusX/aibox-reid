@@ -404,14 +404,16 @@ extern "C"
     Mat lumaImg(input[0]->props.height, input[0]->props.stride, CV_8UC1, (char *)inframe->vaddr[0]);
     Mat chromaImg(input[0]->props.height / 2, input[0]->props.stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
 
-    // chroma UV split
-    std::vector<Mat> uv_channels;
-    split(chromaImg, uv_channels);
-    Mat u = uv_channels[0];
-    Mat v = uv_channels[1];
+    // Tách ảnh chroma thành U và V
+    Mat u(height / 2, stride / 2, CV_8UC1);
+    Mat v(height / 2, stride / 2, CV_8UC1);
 
-    u.convertTo(u, CV_8UC1, 1.0 / 256.0);
-    v.convertTo(v, CV_8UC1, 1.0 / 256.0);
+    for (int i = 0; i < height / 2; ++i) {
+        for (int j = 0; j < stride / 2; ++j) {
+            u.at<uchar>(i, j) = chromaImg.at<Vec2s>(i, j)[0];
+            v.at<uchar>(i, j) = chromaImg.at<Vec2s>(i, j)[1];
+        }
+    }
 
     resize(u, u, Size(lumaImg.cols, lumaImg.rows));
     resize(v, v, Size(lumaImg.cols, lumaImg.rows));
