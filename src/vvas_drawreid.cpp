@@ -405,8 +405,8 @@ extern "C"
     Mat chromaImg(input[0]->props.height / 2, input[0]->props.stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
 
     // Tách ảnh chroma thành U và V
-    Mat u(height / 2, stride / 2, CV_8UC1);
-    Mat v(height / 2, stride / 2, CV_8UC1);
+    Mat u(input[0]->props.height / 2, input[0]->props.stride / 2, CV_8UC1);
+    Mat v(input[0]->props.height / 2, input[0]->props.stride / 2, CV_8UC1);
 
     for (int i = 0; i < height / 2; ++i) {
         for (int j = 0; j < stride / 2; ++j) {
