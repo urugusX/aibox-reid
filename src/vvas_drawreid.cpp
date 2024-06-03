@@ -399,7 +399,29 @@ extern "C"
     vvas_xoverlaypriv *kpriv = (vvas_xoverlaypriv *)handle->kernel_priv;
 
     /* get metadata from input */
-    cv::Mat tcpimage(input[0]->props.height, input[0]->props.width, CV_8UC3, (char *)inframe->vaddr[0]);
+    //cv::Mat tcpimage(input[0]->props.height, input[0]->props.width, CV_8UC3, (char *)inframe->vaddr[0]);
+
+    Mat lumaImg(input[0]->props.height, input[0]->props.stride, CV_8UC1, (char *)inframe->vaddr[0]);
+    Mat chromaImg(input[0]->props.height / 2, input[0]->props.stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
+
+    // chroma UV split
+    std::vector<Mat> uv_channels;
+    split(chromaImg, uv_channels);
+    Mat u = uv_channels[0];
+    Mat v = uv_channels[1];
+
+    u.convertTo(u, CV_8UC1, 1.0 / 256.0);
+    v.convertTo(v, CV_8UC1, 1.0 / 256.0);
+
+    resize(u, u, Size(lumaImg.cols, lumaImg.rows));
+    resize(v, v, Size(lumaImg.cols, lumaImg.rows));
+
+    std::vector<Mat> yuv_channels = {lumaImg, u, v};
+    Mat yuvImg;
+    merge(yuv_channels, yuvImg);
+
+    Mat tcpimage;
+    cvtColor(yuvImg, tcpimage, COLOR_YUV2BGR);
 
     vvas_ms_roi roi_data;
     parse_rect(handle, start, input, output, roi_data);
