@@ -1,0 +1,21 @@
+{
+  "xclbin-location":"/usr/lib/dpu.xclbin",
+  "vvas-library-repo": "/opt/xilinx/kv260-aibox-reid/lib/",
+  "element-mode":"inplace",
+  "kernels" :[
+    {
+      "library-name":"libvvas_drawreid.so",
+      "config": {
+        "port": 1234, 
+        "font_size" : 1,
+        "font" : 3,
+        "thickness" : 2,
+        "debug_level" : 0,
+        "label_color" : { "blue" : 0, "green" : 0, "red" : 255 },
+        "label_filter" : [ "class", "probability" ],
+        "classes" : [
+        ]
+      }
+    }
+  ]
+}

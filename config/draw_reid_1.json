@@ -6,7 +6,8 @@
     {
       "library-name":"libvvas_drawreid.so",
       "config": {
-        "font_size" : 3,
+        "port": 1235, 
+        "font_size" : 1,
         "font" : 3,
         "thickness" : 2,
         "debug_level" : 0,
