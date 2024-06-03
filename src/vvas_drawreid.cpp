@@ -401,30 +401,8 @@ extern "C"
     /* get metadata from input */
     //cv::Mat tcpimage(input[0]->props.height, input[0]->props.width, CV_8UC3, (char *)inframe->vaddr[0]);
 
-    Mat lumaImg(input[0]->props.height, input[0]->props.stride, CV_8UC1, (char *)inframe->vaddr[0]);
-    Mat chromaImg(input[0]->props.height / 2, input[0]->props.stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
-
-    // Tách ảnh chroma thành U và V
-    Mat u(input[0]->props.height / 2, input[0]->props.stride / 2, CV_8UC1);
-    Mat v(input[0]->props.height / 2, input[0]->props.stride / 2, CV_8UC1);
-
-    for (int i = 0; i < height / 2; ++i) {
-        for (int j = 0; j < stride / 2; ++j) {
-            u.at<uchar>(i, j) = chromaImg.at<Vec2s>(i, j)[0];
-            v.at<uchar>(i, j) = chromaImg.at<Vec2s>(i, j)[1];
-        }
-    }
-
-    resize(u, u, Size(lumaImg.cols, lumaImg.rows));
-    resize(v, v, Size(lumaImg.cols, lumaImg.rows));
-
-    std::vector<Mat> yuv_channels = {lumaImg, u, v};
-    Mat yuvImg;
-    merge(yuv_channels, yuvImg);
-
-    Mat tcpimage;
-    cvtColor(yuvImg, tcpimage, COLOR_YUV2BGR);
-
+    Mat tcpimage(input[0]->props.height, input[0]->props.stride, CV_8UC1, (char *)inframe->vaddr[0]);
+    
     vvas_ms_roi roi_data;
     parse_rect(handle, start, input, output, roi_data);
 
