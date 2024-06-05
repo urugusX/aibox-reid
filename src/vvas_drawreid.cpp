@@ -240,6 +240,32 @@ static int parse_rect(VVASKernel * handle, int start,
     return 0;
 }
 
+void convertYUVtoRGB(const Mat &lumaImg, const Mat &chromaImg, Mat &outputRGB) {
+    // Tách U và V từ ảnh Chroma (UV)
+    Mat u, v;
+    u.create(lumaImg.rows / 2, lumaImg.cols / 2, CV_8UC1);
+    v.create(lumaImg.rows / 2, lumaImg.cols / 2, CV_8UC1);
+
+    for (int i = 0; i < chromaImg.rows; i++) {
+        for (int j = 0; j < chromaImg.cols; j++) {
+            uint16_t uv = chromaImg.at<uint16_t>(i, j);
+            u.at<uchar>(i, j) = uv >> 8;
+            v.at<uchar>(i, j) = uv & 0xFF;
+        }
+    }
+
+    // Thay đổi kích thước của U và V
+    Mat u_resized, v_resized;
+    resize(u, u_resized, lumaImg.size(), 0, 0, INTER_LINEAR);
+    resize(v, v_resized, lumaImg.size(), 0, 0, INTER_LINEAR);
+
+    // Tạo ảnh YUV và chuyển đổi sang RGB
+    Mat yuv;
+    std::vector<Mat> yuv_channels = { lumaImg, u_resized, v_resized };
+    merge(yuv_channels, yuv);
+    cvtColor(yuv, outputRGB, COLOR_YUV2RGB);
+}
+
 extern "C"
 {
   int32_t xlnx_kernel_init (VVASKernel * handle)
@@ -404,26 +430,9 @@ extern "C"
 
     Mat lumaImg(input[0]->props.height, input[0]->props.stride, CV_8UC1, (char *)inframe->vaddr[0]);
     Mat chromaImg(input[0]->props.height / 2, input[0]->props.stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
-
-    int height = input[0]->props.height;
-    int stride = input[0]->props.stride;
-
-    // Chuyển đổi Chroma từ CV_16UC1 sang hai kênh UV CV_8UC2
-    Mat chromaImg8UC2;
-    chromaImg.convertTo(chromaImg8UC2, CV_8UC2);
-
-    // Tạo Mat YUV 4:2:0
-    Mat yuv420Img(height + height / 2, stride, CV_8UC1);
-
-    // Sao chép Luma (Y) vào phần đầu của yuv420Img
-    lumaImg.copyTo(yuv420Img(Rect(0, 0, stride, height)));
-
-    // Sao chép Chroma (UV) vào phần còn lại của yuv420Img
-    chromaImg8UC2.reshape(1, height / 2).copyTo(yuv420Img(Rect(0, height, stride, height / 2)));
-
-    // Chuyển đổi từ YUV 4:2:0 sang BGR
     Mat tcpimage;
-    cvtColor(yuv420Img, tcpimage, COLOR_YUV2BGR_I420);
+	  
+    convertYUVtoRGB(lumaImg, chromaImg, tcpimage);
 
     // Kiểm tra kiểu của bgrImg
     if (tcpimage.type() == CV_8UC3) {
