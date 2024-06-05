@@ -405,26 +405,29 @@ extern "C"
     Mat lumaImg(input[0]->props.height, input[0]->props.stride, CV_8UC1, (char *)inframe->vaddr[0]);
     Mat chromaImg(input[0]->props.height / 2, input[0]->props.stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
 
-    // Tách ảnh chroma thành U và V
-    Mat u(input[0]->props.height / 2, input[0]->props.stride / 2, CV_8UC1);
-    Mat v(input[0]->props.height / 2, input[0]->props.stride / 2, CV_8UC1);
+        int height = input[0]->props.height;
+    int stride = input[0]->props.stride;
 
-    for (int i = 0; i < input[0]->props.height / 2; ++i) {
-        for (int j = 0; j < input[0]->props.stride / 2; ++j) {
-            u.at<uchar>(i, j) = chromaImg.at<Vec2s>(i, j)[0] / 256;
-            v.at<uchar>(i, j) = chromaImg.at<Vec2s>(i, j)[1] / 256;
-        }
-    }
+    // Tạo Mat cho Luma (Y) và Chroma (UV)
+    Mat lumaImg(height, stride, CV_8UC1, (char *)inframe->vaddr[0]);
+    Mat chromaImg(height / 2, stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
 
-    resize(u, u, Size(lumaImg.cols, lumaImg.rows), 0, 0, INTER_LINEAR);
-    resize(v, v, Size(lumaImg.cols, lumaImg.rows), 0, 0, INTER_LINEAR);
+    // Chuyển đổi Chroma từ CV_16UC1 sang hai kênh UV CV_8UC2
+    Mat chromaImg8UC2;
+    chromaImg.convertTo(chromaImg8UC2, CV_8UC2);
 
-    std::vector<Mat> yuv_channels = {lumaImg, u, v};
-    Mat yuvImg;
-    merge(yuv_channels, yuvImg);
+    // Tạo Mat YUV 4:2:0
+    Mat yuv420Img(height + height / 2, stride, CV_8UC1);
 
+    // Sao chép Luma (Y) vào phần đầu của yuv420Img
+    lumaImg.copyTo(yuv420Img(Rect(0, 0, stride, height)));
+
+    // Sao chép Chroma (UV) vào phần còn lại của yuv420Img
+    chromaImg8UC2.reshape(1, height / 2).copyTo(yuv420Img(Rect(0, height, stride, height / 2)));
+
+    // Chuyển đổi từ YUV 4:2:0 sang BGR
     Mat tcpimage;
-    cvtColor(yuvImg, tcpimage, COLOR_YUV2BGR);
+    cvtColor(yuv420Img, tcpimage, COLOR_YUV2BGR_I420);
 
     vvas_ms_roi roi_data;
     parse_rect(handle, start, input, output, roi_data);
