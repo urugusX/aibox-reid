@@ -405,13 +405,6 @@ extern "C"
     Mat lumaImg(input[0]->props.height, input[0]->props.stride, CV_8UC1, (char *)inframe->vaddr[0]);
     Mat chromaImg(input[0]->props.height / 2, input[0]->props.stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
 
-        int height = input[0]->props.height;
-    int stride = input[0]->props.stride;
-
-    // Tạo Mat cho Luma (Y) và Chroma (UV)
-    Mat lumaImg(height, stride, CV_8UC1, (char *)inframe->vaddr[0]);
-    Mat chromaImg(height / 2, stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
-
     // Chuyển đổi Chroma từ CV_16UC1 sang hai kênh UV CV_8UC2
     Mat chromaImg8UC2;
     chromaImg.convertTo(chromaImg8UC2, CV_8UC2);
@@ -428,6 +421,13 @@ extern "C"
     // Chuyển đổi từ YUV 4:2:0 sang BGR
     Mat tcpimage;
     cvtColor(yuv420Img, tcpimage, COLOR_YUV2BGR_I420);
+
+    // Kiểm tra kiểu của bgrImg
+    if (tcpimage.type() == CV_8UC3) {
+        cout << "The output image is of type CV_8UC3." << endl;
+    } else {
+        cout << "The output image is not of type CV_8UC3." << endl;
+    }
 
     vvas_ms_roi roi_data;
     parse_rect(handle, start, input, output, roi_data);
