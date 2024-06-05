@@ -405,6 +405,9 @@ extern "C"
     Mat lumaImg(input[0]->props.height, input[0]->props.stride, CV_8UC1, (char *)inframe->vaddr[0]);
     Mat chromaImg(input[0]->props.height / 2, input[0]->props.stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
 
+    int height = input[0]->props.height;
+    int stride = input[0]->props.stride;
+
     // Chuyển đổi Chroma từ CV_16UC1 sang hai kênh UV CV_8UC2
     Mat chromaImg8UC2;
     chromaImg.convertTo(chromaImg8UC2, CV_8UC2);
