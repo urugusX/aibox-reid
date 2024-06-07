@@ -125,6 +125,30 @@ static int parse_rect(VVASKernel * handle, int start,
     return 0;
 }
 
+void convertYUVtoRGB(const Mat &lumaImg, const Mat &chromaImg, Mat &outputRGB) {
+    // Tách U và V từ ảnh Chroma (UV)
+    Mat u, v;
+    u.create(lumaImg.rows / 2, lumaImg.cols / 2, CV_8UC1);
+    v.create(lumaImg.rows / 2, lumaImg.cols / 2, CV_8UC1);
+
+    for (int i = 0; i < chromaImg.rows; i++) {
+        for (int j = 0; j < chromaImg.cols; j++) {
+            uint16_t uv = chromaImg.at<uint16_t>(i, j);
+            u.at<uchar>(i, j) = uv >> 8;
+            v.at<uchar>(i, j) = uv & 0xFF;
+        }
+    }
+
+    // Thay đổi kích thước của U và V
+    Mat u_resized, v_resized;
+    resize(u, u_resized, lumaImg.size(), 0, 0, INTER_LINEAR);
+    resize(v, v_resized, lumaImg.size(), 0, 0, INTER_LINEAR);
+
+    // Tạo ảnh YUV và chuyển đổi sang RGB
+    Mat yuv;
+    std::vector<Mat> yuv_channels = { lumaImg, u_resized, v_resized };
+    me
+
 extern "C" {
 int32_t xlnx_kernel_init(VVASKernel *handle) {
   json_t *jconfig = handle->kernel_config;
@@ -196,65 +220,74 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
 
   static int frame_num = 0;
   frame_num++;
-  std::vector<vitis::ai::ReidTracker::InputCharact> input_characts;
-  /* get metadata from input */
-  cv::Mat tcpimage(input[0]->props.height, input[0]->props.width, CV_8UC3, (char *)in_vvas_frame->vaddr[0]);
-
-  vvas_ms_roi roi_data;
-  parse_rect(handle, start, input, output, roi_data);
-
-  //tcp connect setting
-  int sock = socket(AF_INET, SOCK_STREAM, 0);
-  struct sockaddr_in serverAddress;
-  serverAddress.sin_family = AF_INET;
-  serverAddress.sin_port = htons(kernel_priv->port);
-  serverAddress.sin_addr.s_addr = inet_addr("192.168.4.131");
 	
-  if (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) {
-      std::cerr << "Connection failed." << std::endl;
-      return -1;
-  } else {
-      std::cout << "Connected successfully." << std::endl;
-  }
+    Mat lumaImg(input[0]->props.height, input[0]->props.stride, CV_8UC1, (char *)inframe->vaddr[0]);
+    Mat chromaImg(input[0]->props.height / 2, input[0]->props.stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
+    Mat tcpimage;
+	  
+    convertYUVtoRGB(lumaImg, chromaImg, tcpimage);
+
+    // Kiểm tra kiểu của bgrImg
+    if (tcpimage.type() == CV_8UC3) {
+        cout << "The output image is of type CV_8UC3." << endl;
+    } else {
+        cout << "The output image is not of type CV_8UC3." << endl;
+    }
+
+    vvas_ms_roi roi_data;
+    parse_rect(handle, start, input, output, roi_data);
+
+    //tcp connect setting
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in serverAddress;
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(kernel_priv->port);
+    serverAddress.sin_addr.s_addr = inet_addr("192.168.4.131");
+
+    if (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) {
+        std::cerr << "Draw: Connection failed." << std::endl;
+    } else {
+        std::cout << "Draw: Connected successfully." << std::endl;
+
+        int type = tcpimage.type();
+        int rows = tcpimage.rows;
+        int cols = tcpimage.cols;
+        int channels = tcpimage.channels();
+
+        std::cout << "Type: " << type << ", Rows: " << rows << ", Cols: " << cols << ", Channels: " << channels << std::endl;
+
+        int converted_type = htonl(type);
+        int converted_rows = htonl(rows);
+        int converted_cols = htonl(cols);
+        int converted_channels = htonl(channels);
+
+        send(sock, &converted_type, sizeof(converted_type), 0);
+        send(sock, &converted_rows, sizeof(converted_rows), 0);
+        send(sock, &converted_cols, sizeof(converted_cols), 0);
+        send(sock, &converted_channels, sizeof(converted_channels), 0);
+
+        send(sock, (char*)tcpimage.data, tcpimage.total() * tcpimage.elemSize(), 0);
+        std::cout << "Sending bytes: " << tcpimage.total() * tcpimage.elemSize() << std::endl;
+
+        int bbox_count = roi_data.nobj;
+        int converted_bbox_count = htonl(bbox_count);
+        send(sock, &converted_bbox_count, sizeof(converted_bbox_count), 0);
+
+        for (uint32_t i = 0; i < roi_data.nobj; i++) {
+          uint32_t converted_x = htonl(roi_data.roi[i].x_cord);
+          uint32_t converted_y = htonl(roi_data.roi[i].y_cord);
+          uint32_t converted_width = htonl(roi_data.roi[i].width);
+          uint32_t converted_height = htonl(roi_data.roi[i].height);
+          std::cout << "x: " << roi_data.roi[i].x_cord << ", y: " << roi_data.roi[i].y_cord << ", width: " << roi_data.roi[i].width << ", height: " << roi_data.roi[i].height << std::endl;
+
+          send(sock, &converted_x, sizeof(converted_x), 0);
+          send(sock, &converted_y, sizeof(converted_y), 0);
+          send(sock, &converted_width, sizeof(converted_width), 0);
+          send(sock, &converted_height, sizeof(converted_height), 0);
+        }
+    }
   
-  int type = tcpimage.type();
-  int rows = tcpimage.rows;
-  int cols = tcpimage.cols;
-  int channels = tcpimage.channels();
-
-  std::cout << "Type: " << type << ", Rows: " << rows << ", Cols: " << cols << ", Channels: " << channels << std::endl;
-
-  int converted_type = htonl(type);
-  int converted_rows = htonl(rows);
-  int converted_cols = htonl(cols);
-  int converted_channels = htonl(channels);
-
-  send(sock, &converted_type, sizeof(converted_type), 0);
-  send(sock, &converted_rows, sizeof(converted_rows), 0);
-  send(sock, &converted_cols, sizeof(converted_cols), 0);
-  send(sock, &converted_channels, sizeof(converted_channels), 0);
-
-  send(sock, (char*)tcpimage.data, tcpimage.total() * tcpimage.elemSize(), 0);
-  std::cout << "Sending bytes: " << tcpimage.total() * tcpimage.elemSize() << std::endl;
-
-  int bbox_count = roi_data.nobj;
-  int converted_bbox_count = htonl(bbox_count);
-  send(sock, &converted_bbox_count, sizeof(converted_bbox_count), 0);
-
-  for (uint32_t i = 0; i < roi_data.nobj; i++) {
-    uint32_t converted_x = htonl(roi_data.roi[i].x_cord);
-    uint32_t converted_y = htonl(roi_data.roi[i].y_cord);
-    uint32_t converted_width = htonl(roi_data.roi[i].width);
-    uint32_t converted_height = htonl(roi_data.roi[i].height);
-    std::cout << "x: " << roi_data.roi[i].x_cord << ", y: " << roi_data.roi[i].y_cord << ", width: " << roi_data.roi[i].width << ", height: " << roi_data.roi[i].height << std::endl;
-
-    send(sock, &converted_x, sizeof(converted_x), 0);
-    send(sock, &converted_y, sizeof(converted_y), 0);
-    send(sock, &converted_width, sizeof(converted_width), 0);
-    send(sock, &converted_height, sizeof(converted_height), 0);
-  }
-
-  close(sock);
+    close(sock);
 
   m__TIC__(getfeat);
   for (uint32_t i = 0; i < roi_data.nobj; i++) {
