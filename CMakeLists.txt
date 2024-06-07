@@ -90,6 +90,7 @@ install(FILES
     config/reid.json
     config/draw_reid_0.json
     config/draw_reid_1.json
+    config/draw.json
     DESTINATION ${INSTALL_PATH}/share/vvas/)
 
 install(DIRECTORY
