@@ -215,7 +215,7 @@ uint32_t xlnx_kernel_deinit(VVASKernel *handle) {
 int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
                           VVASFrame *input[MAX_NUM_OBJECT],
                           VVASFrame *output[MAX_NUM_OBJECT]) {
-  VVASFrame *in_vvas_frame = input[0];
+  VVASFrame *inframe = input[0];
   ReidKernelPriv *kernel_priv = (ReidKernelPriv *)handle->kernel_priv;
   if ( !kernel_priv->det.get() || !kernel_priv->tracker.get() ) {
     return 1;
