@@ -265,7 +265,6 @@ main (int argc, char *argv[])
                 ! fakesink \
                 ! queue ! scalem%d.sink_slave_0 scalem%d.src_slave_0 \
                 ! queue ! vvas_xfilter kernels-config=\"%s/reid_%d.json\" \
-                ! fakesink \
                 t%d.src_1 \
                 ! queue ! scalem%d.sink_slave_1 scalem%d.src_slave_1 \
                 ! queue ! vvas_xfilter kernels-config=\"%s/draw_reid.json\" \
