@@ -24,12 +24,7 @@
 #include <gst/vvas/gstinferencemeta.h>
 #define __STDC_FORMAT_MACROS 1
 #include <stdint.h>
-#include <unistd.h>
-#include "common.hpp"
-#include <sstream>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+
 
 enum
 {
@@ -69,7 +64,6 @@ using namespace std;
 #define MAX_LABEL_LEN 1024
 #define MAX_ALLOWED_CLASS 20
 #define MAX_ALLOWED_LABELS 20
-#define DEFAULT_REID_PORT     1234
 
 struct color
 {
@@ -89,7 +83,6 @@ struct vvas_xoverlaypriv
 {
   float font_size;
   unsigned int font;
-  uint32_t port;
   int line_thickness;
   int y_offset;
   color label_color;
@@ -175,70 +168,6 @@ static void DrawReID( VVASFrame *inframe, vvas_xoverlaypriv *kpriv,
   }
 }
 
-struct _roi {
-    uint32_t y_cord;
-    uint32_t x_cord;
-    uint32_t height;
-    uint32_t width;
-    double   prob;
-	  GstInferencePrediction *prediction;
-};
-
-#define MAX_CHANNELS 40
-typedef struct _vvas_ms_roi {
-    uint32_t nobj;
-    struct _roi roi[MAX_CHANNELS];
-} vvas_ms_roi;
-
-static int parse_rect(VVASKernel * handle, int start,
-      VVASFrame * input[MAX_NUM_OBJECT], VVASFrame * output[MAX_NUM_OBJECT],
-      vvas_ms_roi &roi_data
-      )
-{
-    VVASFrame *inframe = input[0];
-    GstInferenceMeta *infer_meta = ((GstInferenceMeta *)gst_buffer_get_meta((GstBuffer *)
-                                                              inframe->app_priv,
-                                                          gst_inference_meta_api_get_type()));
-    roi_data.nobj = 0;
-    if (infer_meta == NULL)
-    {
-        return 0;
-    }
-
-    GstInferencePrediction *root = infer_meta->prediction;
-
-    /* Iterate through the immediate child predictions */
-    GSList *tmp = gst_inference_prediction_get_children(root);
-    for (GSList *child_predictions = tmp;
-         child_predictions;
-         child_predictions = g_slist_next(child_predictions))
-    {
-        GstInferencePrediction *child = (GstInferencePrediction *)child_predictions->data;
-
-        /* On each children, iterate through the different associated classes */
-        for (GList *classes = child->classifications;
-             classes; classes = g_list_next(classes))
-        {
-            GstInferenceClassification *classification = (GstInferenceClassification *)classes->data;
-            if (roi_data.nobj < MAX_CHANNELS)
-            {
-                int ind = roi_data.nobj;
-                struct _roi &roi = roi_data.roi[ind];
-                roi.y_cord = (uint32_t)child->bbox.y + child->bbox.y % 2;
-                roi.x_cord = (uint32_t)child->bbox.x;
-                roi.height = (uint32_t)child->bbox.height - child->bbox.height % 2;
-                roi.width = (uint32_t)child->bbox.width - child->bbox.width % 2;
-                roi.prob = classification->class_prob;
-                roi.prediction = child;
-                roi_data.nobj++;
-
-            }
-        }
-    }
-    g_slist_free(tmp);
-    return 0;
-}
-
 extern "C"
 {
   int32_t xlnx_kernel_init (VVASKernel * handle)
@@ -267,12 +196,6 @@ extern "C"
         log_level = LOG_LEVEL_WARNING;
     else
         log_level = json_integer_value (val);
-
-        val = json_object_get(jconfig, "port");
-    if (!val || !json_is_number(val))
-        kpriv->port = DEFAULT_REID_PORT;
-     else
-        kpriv->port = json_number_value(val);
 
       val = json_object_get (jconfig, "font_size");
     if (!val || !json_is_integer (val))
@@ -398,88 +321,9 @@ extern "C"
     VVASFrame *inframe = input[0];
     vvas_xoverlaypriv *kpriv = (vvas_xoverlaypriv *)handle->kernel_priv;
 
-    /* get metadata from input */
-    //cv::Mat tcpimage(input[0]->props.height, input[0]->props.width, CV_8UC3, (char *)inframe->vaddr[0]);
-
-    Mat lumaImg(input[0]->props.height, input[0]->props.stride, CV_8UC1, (char *)inframe->vaddr[0]);
-    Mat chromaImg(input[0]->props.height / 2, input[0]->props.stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
-
-    // Tách ảnh chroma thành U và V
-    Mat u(input[0]->props.height / 2, input[0]->props.stride / 2, CV_8UC1);
-    Mat v(input[0]->props.height / 2, input[0]->props.stride / 2, CV_8UC1);
-
-    for (int i = 0; i < input[0]->props.height / 2; ++i) {
-        for (int j = 0; j < input[0]->props.stride / 2; ++j) {
-            u.at<uchar>(i, j) = chromaImg.at<Vec2s>(i, j)[0];
-            v.at<uchar>(i, j) = chromaImg.at<Vec2s>(i, j)[1];
-        }
-    }
-
-    resize(u, u, Size(lumaImg.cols, lumaImg.rows));
-    resize(v, v, Size(lumaImg.cols, lumaImg.rows));
-
-    std::vector<Mat> yuv_channels = {lumaImg, u, v};
-    Mat yuvImg;
-    merge(yuv_channels, yuvImg);
-
-    Mat tcpimage;
-    cvtColor(yuvImg, tcpimage, COLOR_YUV2BGR);
-
-    vvas_ms_roi roi_data;
-    parse_rect(handle, start, input, output, roi_data);
-
-    //tcp connect setting
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    struct sockaddr_in serverAddress;
-    serverAddress.sin_family = AF_INET;
-    serverAddress.sin_port = htons(kpriv->port);
-    serverAddress.sin_addr.s_addr = inet_addr("192.168.4.131");
-
-    if (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) {
-        std::cerr << "Draw: Connection failed." << std::endl;
-    } else {
-        std::cout << "Draw: Connected successfully." << std::endl;
-
-        int type = tcpimage.type();
-        int rows = tcpimage.rows;
-        int cols = tcpimage.cols;
-        int channels = tcpimage.channels();
-
-        std::cout << "Type: " << type << ", Rows: " << rows << ", Cols: " << cols << ", Channels: " << channels << std::endl;
-
-        int converted_type = htonl(type);
-        int converted_rows = htonl(rows);
-        int converted_cols = htonl(cols);
-        int converted_channels = htonl(channels);
-
-        send(sock, &converted_type, sizeof(converted_type), 0);
-        send(sock, &converted_rows, sizeof(converted_rows), 0);
-        send(sock, &converted_cols, sizeof(converted_cols), 0);
-        send(sock, &converted_channels, sizeof(converted_channels), 0);
-
-        send(sock, (char*)tcpimage.data, tcpimage.total() * tcpimage.elemSize(), 0);
-        std::cout << "Sending bytes: " << tcpimage.total() * tcpimage.elemSize() << std::endl;
-
-        int bbox_count = roi_data.nobj;
-        int converted_bbox_count = htonl(bbox_count);
-        send(sock, &converted_bbox_count, sizeof(converted_bbox_count), 0);
-
-        for (uint32_t i = 0; i < roi_data.nobj; i++) {
-          uint32_t converted_x = htonl(roi_data.roi[i].x_cord);
-          uint32_t converted_y = htonl(roi_data.roi[i].y_cord);
-          uint32_t converted_width = htonl(roi_data.roi[i].width);
-          uint32_t converted_height = htonl(roi_data.roi[i].height);
-          std::cout << "x: " << roi_data.roi[i].x_cord << ", y: " << roi_data.roi[i].y_cord << ", width: " << roi_data.roi[i].width << ", height: " << roi_data.roi[i].height << std::endl;
-
-          send(sock, &converted_x, sizeof(converted_x), 0);
-          send(sock, &converted_y, sizeof(converted_y), 0);
-          send(sock, &converted_width, sizeof(converted_width), 0);
-          send(sock, &converted_height, sizeof(converted_height), 0);
-        }
-    }
-  
-    close(sock);
-
+    std::cout << "Draw" << endl;
+    //std::cout << "height: "<< input[0]->props.height << ", width: "<< input[0]->props.width << ", stride: " << input[0]->props.stride << endl;
+    
     if (inframe->props.fmt == VVAS_VFMT_Y_UV8_420)
     {
       LOG_MESSAGE(LOG_LEVEL_DEBUG, "Input frame is in NV12 format\n");
