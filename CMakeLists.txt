@@ -59,6 +59,12 @@ target_link_libraries(vvas_drawreid
   glib-2.0 gobject-2.0 ${OpenCV_LIBS}  jansson vvasutil-2.0 gstvvasinfermeta-2.0)
 install(TARGETS vvas_drawreid DESTINATION ${INSTALL_PATH}/lib)
 
+add_library(vvas_draw SHARED src/vvas_draw.cpp)
+target_include_directories(vvas_draw PRIVATE ${GSTREAMER_INCLUDE_DIRS})
+target_link_libraries(vvas_draw
+  gstapp-1.0 gstreamer-1.0 gstbase-1.0 gobject-2.0 glib-2.0 gstvideo-1.0 gstallocators-1.0 gstrtsp-1.0 gstrtspserver-1.0
+  glib-2.0 gobject-2.0 ${OpenCV_LIBS}  jansson vvasutil-2.0 gstvvasinfermeta-2.0)
+install(TARGETS vvas_draw DESTINATION ${INSTALL_PATH}/lib)
 
 add_library(vvas_pedpp SHARED src/vvas_pedpp.c)
 target_include_directories(vvas_pedpp PRIVATE ${GSTREAMER_INCLUDE_DIRS})
