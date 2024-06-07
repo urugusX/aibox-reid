@@ -148,7 +148,9 @@ void convertYUVtoRGB(const Mat &lumaImg, const Mat &chromaImg, Mat &outputRGB) {
     // Tạo ảnh YUV và chuyển đổi sang RGB
     Mat yuv;
     std::vector<Mat> yuv_channels = { lumaImg, u_resized, v_resized };
-    me
+    merge(yuv_channels, yuv);
+    cvtColor(yuv, outputRGB, COLOR_YUV2RGB);
+}
 
 extern "C" {
 int32_t xlnx_kernel_init(VVASKernel *handle) {
