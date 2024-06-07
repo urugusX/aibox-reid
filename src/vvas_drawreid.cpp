@@ -425,9 +425,6 @@ extern "C"
     VVASFrame *inframe = input[0];
     vvas_xoverlaypriv *kpriv = (vvas_xoverlaypriv *)handle->kernel_priv;
 
-    /* get metadata from input */
-    //cv::Mat tcpimage(input[0]->props.height, input[0]->props.width, CV_8UC3, (char *)inframe->vaddr[0]);
-
     Mat lumaImg(input[0]->props.height, input[0]->props.stride, CV_8UC1, (char *)inframe->vaddr[0]);
     Mat chromaImg(input[0]->props.height / 2, input[0]->props.stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
     Mat tcpimage;
@@ -495,54 +492,7 @@ extern "C"
     }
   
     close(sock);
-
-    if (inframe->props.fmt == VVAS_VFMT_Y_UV8_420)
-    {
-      LOG_MESSAGE(LOG_LEVEL_DEBUG, "Input frame is in NV12 format\n");
-      Mat lumaImg(input[0]->props.height, input[0]->props.stride, CV_8UC1, (char *)inframe->vaddr[0]);
-      Mat chromaImg(input[0]->props.height / 2, input[0]->props.stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
-
-      GstInferenceMeta *infer_meta = ((GstInferenceMeta *)gst_buffer_get_meta((GstBuffer *)
-                                                                inframe->app_priv,
-                                                            gst_inference_meta_api_get_type()));
-      if (infer_meta == NULL)
-      {
-          LOG_MESSAGE(LOG_LEVEL_INFO, "vvas meta data is not available for crop");
-          return false;
-      }
-
-      GstInferencePrediction *root = infer_meta->prediction;
-
-      /* Iterate through the immediate child predictions */
-      GSList *tmp = gst_inference_prediction_get_children(root);
-      for (GSList *child_predictions = tmp;
-           child_predictions;
-           child_predictions = g_slist_next(child_predictions))
-      {
-          GstInferencePrediction *child = (GstInferencePrediction *)child_predictions->data;
-
-          /* On each children, iterate through the different associated classes */
-          for (GList *classes = child->classifications;
-               classes; classes = g_list_next(classes))
-          {
-              GstInferenceClassification *classification = (GstInferenceClassification *)classes->data;
-              if ((int64_t)child->reserved_2 != -1) 
-              {
-              DrawReID( inframe, kpriv,
-                        child->bbox.x, child->bbox.x + child->bbox.width,
-                        child->bbox.y, child->bbox.y + child->bbox.height,
-                        (uint64_t)child->reserved_1, lumaImg, chromaImg);
-              }
-          }
-      }
-      g_slist_free(tmp);
       return 0;
-    }
-    else
-    {
-      LOG_MESSAGE(LOG_LEVEL_WARNING, "Unsupported color format\n");
-      return 0;
-    }
   }
 
   int32_t xlnx_kernel_done (VVASKernel * handle)
