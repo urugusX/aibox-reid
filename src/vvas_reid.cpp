@@ -42,6 +42,7 @@
 #define DEFAULT_MODEL_PATH     "/opt/xilinx/kv260-aibox-reid/share/vitis_ai_library/models"
 
 using namespace std;
+using namespace cv;
 
 struct _Face {
   int last_frame_seen;
