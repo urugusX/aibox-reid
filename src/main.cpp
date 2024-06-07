@@ -261,8 +261,8 @@ main (int argc, char *argv[])
                 ! vvas_xmultisrc kconfig=\"%s/ped_pp.json\" \
                 ! queue ! vvas_xfilter name=refinedet_%d kernels-config=\"%s/refinedet.json\" \
                 ! queue ! vvas_xfilter name=crop_%d      kernels-config=\"%s/crop.json\" \
-                ! queue ! vvas_xfilter kernels-config=\"%s/reid_%d.json\" \
                 ! queue ! scalem%d.sink_master vvas_xmetaaffixer name=scalem%d scalem%d.src_master \
+                ! queue ! vvas_xfilter kernels-config=\"%s/reid_%d.json\" \
                 ! fakesink \
                 t%d.src_1 \
                 ! queue ! scalem%d.sink_slave_0 scalem%d.src_slave_0 \
@@ -275,8 +275,8 @@ main (int argc, char *argv[])
                 , confdir.c_str()
                 , i, confdir.c_str()
                 , i, confdir.c_str()
-                , confdir.c_str(), i
                 , i, i, i
+                , confdir.c_str(), i
                 , i
                 , i, i
                 , confdir.c_str()
