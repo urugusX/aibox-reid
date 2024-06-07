@@ -263,9 +263,11 @@ main (int argc, char *argv[])
                 ! queue ! vvas_xfilter name=crop_%d      kernels-config=\"%s/crop.json\" \
                 ! queue ! scalem%d.sink_master vvas_xmetaaffixer name=scalem%d scalem%d.src_master \
                 ! fakesink \
+                t%d.src_1 \
                 ! queue ! scalem%d.sink_slave_0 scalem%d.src_slave_0 \
                 ! queue ! vvas_xfilter kernels-config=\"%s/reid_%d.json\" \
-                t%d.src_1 \
+                ! fakesink \
+                t%d.src_2 \
                 ! queue ! scalem%d.sink_slave_1 scalem%d.src_slave_1 \
                 ! queue ! vvas_xfilter kernels-config=\"%s/draw_reid.json\" \
                 ! queue %s "
@@ -277,6 +279,7 @@ main (int argc, char *argv[])
                 , i, confdir.c_str()
                 , i, confdir.c_str()
                 , i, i, i
+                , i
                 , i, i
                 , confdir.c_str(), i
                 , i
