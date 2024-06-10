@@ -299,7 +299,7 @@ main (int argc, char *argv[])
                     ! queue ! scalem%d.sink_slave_0 scalem%d.src_slave_0 \
                     ! queue ! vvas_xfilter kernels-config=\"%s/reid_%d.json\" \
                     ! fakesink "
-                    , 34+validsrc, pos%2*960, pos/2*1080, std::string(srcenc)=="h265" && std::string(fr)!="30" ? "true" : "false" ,
+                    , 34+validsrc, pos%2*960, pos/2*1080, std::string(srcenc)=="h265" && std::string(fr)!="30" ? "true" : "false" 
                     , srcOss.str().c_str()
                     , srcenc, srcenc
                     , framerateOss.str().c_str(), queue.c_str()
