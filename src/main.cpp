@@ -266,7 +266,7 @@ main (int argc, char *argv[])
                 ! fakesink \
                 t%d.src_1 \
                 ! queue ! scalem%d.sink_slave_0 scalem%d.src_slave_0 \
-                ! queue ! vvas_xfilter kernels-config=\"%s/draw_reid_%d.json\" \
+                ! queue ! vvas_xfilter kernels-config=\"%s/draw_reid.json\" \
                 ! queue %s "
                 , srcOss.str().c_str()
                 , srcenc, srcenc
@@ -279,7 +279,7 @@ main (int argc, char *argv[])
                 , i, i, i
                 , i
                 , i, i
-                , confdir.c_str(), i
+                , confdir.c_str()
                 , perf
                );
 
