@@ -25,6 +25,7 @@
 #include <stdexcept>
 #include <unistd.h>
 #include <sys/types.h>
+#include <iostream>
 
 static char *msgFirmware = (char *)"Please make sure that the HW accelerator firmware is loaded via xmutil loadapp kv260-aibox-reid.\n";
 static gchar* DEFAULT_SRC_TYPE = (gchar*)"r";
@@ -300,7 +301,7 @@ main (int argc, char *argv[])
 
         validsrc++;
     }
-
+    std::cout << pip << std::endl;
 
     if (validsrc > 0)
     {
