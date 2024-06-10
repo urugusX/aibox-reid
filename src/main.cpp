@@ -25,6 +25,7 @@
 #include <stdexcept>
 #include <unistd.h>
 #include <sys/types.h>
+#include <iostream>
 
 static char *msgFirmware = (char *)"Please make sure that the HW accelerator firmware is loaded via xmutil loadapp kv260-aibox-reid.\n";
 static gchar* DEFAULT_SRC_TYPE = (gchar*)"r";
@@ -265,7 +266,6 @@ main (int argc, char *argv[])
                 ! fakesink \
                 t%d.src_1 \
                 ! queue ! scalem%d.sink_slave_0 scalem%d.src_slave_0 \
-                ! queue ! vvas_xfilter kernels-config=\"%s/reid_%d.json\" \
                 ! queue ! vvas_xfilter kernels-config=\"%s/draw_reid.json\" \
                 ! queue %s "
                 , srcOss.str().c_str()
@@ -278,7 +278,6 @@ main (int argc, char *argv[])
                 , i, i, i
                 , i
                 , i, i
-                , confdir.c_str(), i
                 , confdir.c_str()
                 , perf
                );
@@ -286,8 +285,33 @@ main (int argc, char *argv[])
         if (pos >= 0 && pos <= 3)
         {
             sprintf(pip + strlen(pip),
-                    "! kmssink bus-id=b0000000.v_mix plane-id=%d render-rectangle=\"<%d,%d,960,1080>\" show-preroll-frame=false sync=%s can-scale=false"
-                    , 34+validsrc, pos%2*960, pos/2*1080, std::string(srcenc)=="h265" && std::string(fr)!="30" ? "true" : "false" );
+                    "! kmssink bus-id=b0000000.v_mix plane-id=%d render-rectangle=\"<%d,%d,960,1080>\" show-preroll-frame=false sync=%s can-scale=false \
+                    %s \
+                    ! %sparse ! queue ! omx%sdec \
+                    ! video/x-raw, format=NV12 %s %s \
+                    ! tee name=t%d t%d.src_0 ! queue \
+                    ! vvas_xmultisrc kconfig=\"%s/ped_pp.json\" \
+                    ! queue ! vvas_xfilter name=refinedet_%d kernels-config=\"%s/refinedet.json\" \
+                    ! queue ! vvas_xfilter name=crop_%d      kernels-config=\"%s/crop.json\" \
+                    ! queue ! scalem%d.sink_master vvas_xmetaaffixer name=scalem%d scalem%d.src_master \
+                    ! fakesink \
+                    t%d.src_1 \
+                    ! queue ! scalem%d.sink_slave_0 scalem%d.src_slave_0 \
+                    ! queue ! vvas_xfilter kernels-config=\"%s/reid_%d.json\" \
+                    ! fakesink "
+                    , 34+validsrc, pos%2*960, pos/2*1080, std::string(srcenc)=="h265" && std::string(fr)!="30" ? "true" : "false" ,
+                    , srcOss.str().c_str()
+                    , srcenc, srcenc
+                    , framerateOss.str().c_str(), queue.c_str()
+                    , i+2, i+2
+                    , confdir.c_str()
+                    , i+2, confdir.c_str()
+                    , i+2, confdir.c_str()
+                    , i+2, i+2, i+2
+                    , i+2
+                    , i+2, i+2
+                    , confdir.c_str(), i
+                    );
         }
         else
         {
@@ -298,6 +322,7 @@ main (int argc, char *argv[])
         validsrc++;
     }
 
+    std::cout << pip << std::endl;
 
     if (validsrc > 0)
     {
