@@ -1,7 +1,7 @@
 {
   "xclbin-location": "/usr/lib/dpu.xclbin",
   "vvas-library-repo": "/opt/xilinx/kv260-aibox-reid/lib/",
-  "element-mode": "passthrough",
+  "element-mode": "inplace",
   "kernels": [
     {
       "library-name": "libvvas_reid.so",
