@@ -191,7 +191,9 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start, VVASFrame *input[MAX_NU
       LOG_MESSAGE (LOG_LEVEL_ERROR, "Preprocess: failed to receive response from kernel");
       return ret;
     }
-
+    printf("After vvas_kernel_done: \n");
+    printf("input width: %d input height: %d input stride: %d\n", input[0]->props.width, input[0]->props.height, input[0]->props.stride);
+    printf("output width: %d output height: %d output stride: %d\n", output[0]->props.width, output[0]->props.height, output[0]->props.stride);
     return 0;
 }
 
