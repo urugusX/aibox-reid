@@ -176,6 +176,10 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start, VVASFrame *input[MAX_NU
         (output[0]->props.height),
         (output[0]->props.width)
         );
+
+    printf("After vvas_kernel_start: \n");
+    printf("input width: %d input height: %d input stride: %d\n", input[0]->props.width, input[0]->props.height, input[0]->props.stride);
+    printf("output width: %d output height: %d output stride: %d\n", output[0]->props.width, output[0]->props.height, output[0]->props.stride);
     if (ret < 0) {
       LOG_MESSAGE (LOG_LEVEL_ERROR, "Preprocess: failed to issue execute command");
       return ret;
