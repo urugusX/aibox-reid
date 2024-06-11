@@ -18,7 +18,6 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
-#include <iostream>
 
 enum
 {
@@ -162,8 +161,8 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start, VVASFrame *input[MAX_NU
     ResizeKernelPriv *kernel_priv;
     kernel_priv = (ResizeKernelPriv *)handle->kernel_priv;
 
-    std::cout << "input width: " << input[0]->props.width << "input height: " << input[0]->props.height << "input stride: " << input[0]->props.stride << std::endl;
-    std::cout << "output width: " << output[0]->props.width << "output width: " << output[0]->props.height << "output width: " << output[0]->props.width << std::endl;
+    printf("input width: %d input height: %d input stride: %d\n", input[0]->props.width, input[0]->props.height, input[0]->props.stride);
+    printf("output width: %d output height: %d output stride: %d\n", output[0]->props.width, output[0]->props.height, output[0]->props.stride);
 	
     int ret = vvas_kernel_start (handle, "ppppuuuuuu", 
         (input[0]->paddr[0]),
