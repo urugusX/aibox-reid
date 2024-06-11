@@ -31,6 +31,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <chrono>
 
 enum
 {
@@ -348,6 +349,7 @@ extern "C"
   {
     VVASFrame *inframe = input[0];
     vvas_xoverlaypriv *kpriv = (vvas_xoverlaypriv *)handle->kernel_priv;
+    auto starttime = std::chrono::high_resolution_clock::now();
 
     Mat lumaImg(input[0]->props.height / 3, input[0]->props.width / 2, CV_8UC1, (char *)inframe->vaddr[0]);
     Mat chromaImg(input[0]->props.height / 6, input[0]->props.width / 4, CV_16UC1, (char *)inframe->vaddr[1]);
@@ -416,7 +418,12 @@ extern "C"
     }
   
     close(sock);
-      return 0;
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double, std::milli> elapsed = end - starttime;
+    std::cout << "Thời gian chạy: " << elapsed.count() << " ms" << std::endl;
+  
+    return 0;
   }
 
   int32_t xlnx_kernel_done (VVASKernel * handle)
