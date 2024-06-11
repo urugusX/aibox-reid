@@ -21,6 +21,7 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
 #include <thread>
+#include <iostream>
 extern "C"
 {
 #include <vvas/vvas_kernel.h>
@@ -285,6 +286,7 @@ int32_t xlnx_kernel_start (VVASKernel *handle, int start /*unused */,
 {
     int ret;
     uint32_t value = 0;
+    std::cout << "width: " << input[0]->props.width << "height: " << input[0]->props.height << std::endl;
     vvas_ms_roi roi_data;
     parse_rect(handle, start, input, output, roi_data);
    /* set descriptor */
