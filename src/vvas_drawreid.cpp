@@ -349,8 +349,8 @@ extern "C"
     VVASFrame *inframe = input[0];
     vvas_xoverlaypriv *kpriv = (vvas_xoverlaypriv *)handle->kernel_priv;
 
-    Mat lumaImg(input[0]->props.height / 2, input[0]->props.width / 3, CV_8UC1, (char *)inframe->vaddr[0]);
-    Mat chromaImg(input[0]->props.height / 4, input[0]->props.width / 6, CV_16UC1, (char *)inframe->vaddr[1]);
+    Mat lumaImg(input[0]->props.height / 3, input[0]->props.width / 2, CV_8UC1, (char *)inframe->vaddr[0]);
+    Mat chromaImg(input[0]->props.height / 6, input[0]->props.width / 4, CV_16UC1, (char *)inframe->vaddr[1]);
     Mat tcpimage;
 	  
     convertYUVtoRGB(lumaImg, chromaImg, tcpimage);
