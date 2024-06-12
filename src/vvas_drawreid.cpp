@@ -13,18 +13,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+ 
 #include <opencv2/core.hpp>
 #include <opencv2/highgui.hpp>
 #include <opencv2/imgproc.hpp>
 #include <opencv2/imgcodecs.hpp>
+#include <opencv2/opencv.hpp>
 #include <iostream>
 #include <math.h>
 #include <vvas/vvas_kernel.h>
 #include <gst/vvas/gstinferencemeta.h>
 #define __STDC_FORMAT_MACROS 1
 #include <stdint.h>
-
+#include <unistd.h>
+#include "common.hpp"
+#include <sstream>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <chrono>
 
 enum
 {
@@ -64,6 +71,7 @@ using namespace std;
 #define MAX_LABEL_LEN 1024
 #define MAX_ALLOWED_CLASS 20
 #define MAX_ALLOWED_LABELS 20
+#define DEFAULT_REID_PORT     1234
 
 struct color
 {
@@ -83,6 +91,7 @@ struct vvas_xoverlaypriv
 {
   float font_size;
   unsigned int font;
+  uint32_t port;
   int line_thickness;
   int y_offset;
   color label_color;
@@ -92,80 +101,94 @@ struct vvas_xoverlaypriv
   vvass_xclassification class_list[MAX_ALLOWED_CLASS];
 };
 
-/* Get y and uv color components corresponding to givne RGB color */
-void
-convert_rgb_to_yuv_clrs (color clr, unsigned char *y, unsigned short *uv)
+struct _roi {
+    uint32_t y_cord;
+    uint32_t x_cord;
+    uint32_t height;
+    uint32_t width;
+    double   prob;
+	  GstInferencePrediction *prediction;
+};
+
+#define MAX_CHANNELS 40
+typedef struct _vvas_ms_roi {
+    uint32_t nobj;
+    struct _roi roi[MAX_CHANNELS];
+} vvas_ms_roi;
+
+static int parse_rect(VVASKernel * handle, int start,
+      VVASFrame * input[MAX_NUM_OBJECT], VVASFrame * output[MAX_NUM_OBJECT],
+      vvas_ms_roi &roi_data
+      )
 {
-  Mat YUVmat;
-  Mat BGRmat (2, 2, CV_8UC3, Scalar (clr.red, clr.green, clr.blue));
-  cvtColor (BGRmat, YUVmat, cv::COLOR_BGR2YUV_I420);
-  *y = YUVmat.at < uchar > (0, 0);
-  *uv = YUVmat.at < uchar > (2, 0) << 8 | YUVmat.at < uchar > (2, 1);
-  return;
+    VVASFrame *inframe = input[0];
+    GstInferenceMeta *infer_meta = ((GstInferenceMeta *)gst_buffer_get_meta((GstBuffer *)
+                                                              inframe->app_priv,
+                                                          gst_inference_meta_api_get_type()));
+    roi_data.nobj = 0;
+    if (infer_meta == NULL)
+    {
+        return 0;
+    }
+
+    GstInferencePrediction *root = infer_meta->prediction;
+
+    /* Iterate through the immediate child predictions */
+    GSList *tmp = gst_inference_prediction_get_children(root);
+    for (GSList *child_predictions = tmp;
+         child_predictions;
+         child_predictions = g_slist_next(child_predictions))
+    {
+        GstInferencePrediction *child = (GstInferencePrediction *)child_predictions->data;
+
+        /* On each children, iterate through the different associated classes */
+        for (GList *classes = child->classifications;
+             classes; classes = g_list_next(classes))
+        {
+            GstInferenceClassification *classification = (GstInferenceClassification *)classes->data;
+            if (roi_data.nobj < MAX_CHANNELS)
+            {
+                int ind = roi_data.nobj;
+                struct _roi &roi = roi_data.roi[ind];
+                roi.y_cord = (uint32_t)child->bbox.y + child->bbox.y % 2;
+                roi.x_cord = (uint32_t)child->bbox.x;
+                roi.height = (uint32_t)child->bbox.height - child->bbox.height % 2;
+                roi.width = (uint32_t)child->bbox.width - child->bbox.width % 2;
+                roi.prob = classification->class_prob;
+                roi.prediction = child;
+                roi_data.nobj++;
+
+            }
+        }
+    }
+    g_slist_free(tmp);
+    return 0;
 }
 
-static void DrawReID( VVASFrame *inframe, vvas_xoverlaypriv *kpriv,
-  int xmin, int xmax, int ymin, int ymax, uint64_t lable,
-  Mat& lumaImg, Mat& chromaImg)
-{
-  /* Check whether the frame is NV12 or BGR and act accordingly */
-  char label_s[256] = "person";
-  //sprintf(label_s, "%lu", lable);
-  std::string label_string(label_s);
+void convertYUVtoRGB(const Mat &lumaImg, const Mat &chromaImg, Mat &outputRGB) {
+    // Tách U và V từ ảnh Chroma (UV)
+    Mat u, v;
+    u.create(lumaImg.rows / 2, lumaImg.cols / 2, CV_8UC1);
+    v.create(lumaImg.rows / 2, lumaImg.cols / 2, CV_8UC1);
 
-  if (inframe->props.fmt == VVAS_VFMT_Y_UV8_420)
-  {
-    unsigned char yScalar;
-    unsigned short uvScalar;
-    color clr = {255, 0, 0};
-    convert_rgb_to_yuv_clrs(clr, &yScalar, &uvScalar);
-    /* Draw rectangle on y an uv plane */
-    int new_xmin = floor(xmin / 2) * 2;
-    int new_ymin = floor(ymin / 2) * 2;
-    int new_xmax = floor(xmax / 2) * 2;
-    int new_ymax = floor(ymax / 2) * 2;
-    int h = new_ymax - new_ymin;
-    int w = new_xmax - new_xmin;
-
-    /* Lets not draw anything when the origin is (0,0) */
-    if (new_xmin || new_ymin)
-    {
-      rectangle(lumaImg, Point(new_xmin, new_ymin), Point(new_xmax, new_ymax),
-                Scalar(yScalar), kpriv->line_thickness, 1, 0);
-      rectangle(chromaImg, Point(new_xmin / 2, new_ymin / 2),
-                Point(new_xmax / 2, new_ymax / 2),
-                Scalar(uvScalar), kpriv->line_thickness, 1, 0);
-    }
-    {
-      int baseline, y_offset = 0;
-      Size textsize = getTextSize(label_string, kpriv->font, kpriv->font_size, 1, &baseline);
-      if ((h < 1) && (w < 1))
-      {
-        if (kpriv->y_offset)
-        {
-          y_offset = kpriv->y_offset;
+    for (int i = 0; i < chromaImg.rows; i++) {
+        for (int j = 0; j < chromaImg.cols; j++) {
+            uint16_t uv = chromaImg.at<uint16_t>(i, j);
+            u.at<uchar>(i, j) = uv >> 8;
+            v.at<uchar>(i, j) = uv & 0xFF;
         }
-        else
-        {
-          y_offset = (inframe->props.height * 0.10);
-        }
-      }
-      /* Draw filled rectangle for labelling, both on y and uv plane */
-      rectangle(lumaImg, Rect(Point(new_xmin, new_ymin - textsize.height), textsize),
-                Scalar(yScalar), FILLED, 1, 0);
-      textsize.height /= 2;
-      textsize.width /= 2;
-      rectangle(chromaImg, Rect(Point(new_xmin / 2, new_ymin / 2 - textsize.height), textsize),
-                Scalar(uvScalar), FILLED, 1, 0);
-
-      /* Draw label text on the filled rectanngle */
-      convert_rgb_to_yuv_clrs(kpriv->label_color, &yScalar, &uvScalar);
-      putText(lumaImg, label_string, cv::Point(new_xmin, new_ymin + y_offset), kpriv->font, kpriv->font_size,
-              Scalar(yScalar), kpriv->line_thickness, 1);
-      putText(chromaImg, label_string, cv::Point(new_xmin / 2, new_ymin / 2 + y_offset / 2), kpriv->font,
-              kpriv->font_size / 2, Scalar(uvScalar), kpriv->line_thickness, 1);
     }
-  }
+
+    // Thay đổi kích thước của U và V
+    Mat u_resized, v_resized;
+    resize(u, u_resized, lumaImg.size(), 0, 0, INTER_LINEAR);
+    resize(v, v_resized, lumaImg.size(), 0, 0, INTER_LINEAR);
+
+    // Tạo ảnh YUV và chuyển đổi sang RGB
+    Mat yuv;
+    std::vector<Mat> yuv_channels = { lumaImg, u_resized, v_resized };
+    merge(yuv_channels, yuv);
+    cvtColor(yuv, outputRGB, COLOR_YUV2RGB);
 }
 
 extern "C"
@@ -196,6 +219,12 @@ extern "C"
         log_level = LOG_LEVEL_WARNING;
     else
         log_level = json_integer_value (val);
+
+        val = json_object_get(jconfig, "port");
+    if (!val || !json_is_number(val))
+        kpriv->port = DEFAULT_REID_PORT;
+     else
+        kpriv->port = json_number_value(val);
 
       val = json_object_get (jconfig, "font_size");
     if (!val || !json_is_integer (val))
@@ -321,55 +350,81 @@ extern "C"
     VVASFrame *inframe = input[0];
     vvas_xoverlaypriv *kpriv = (vvas_xoverlaypriv *)handle->kernel_priv;
 
-    //std::cout << "height: "<< input[0]->props.height << ", width: "<< input[0]->props.width << ", stride: " << input[0]->props.stride << endl;
-    
-    if (inframe->props.fmt == VVAS_VFMT_Y_UV8_420)
-    {
-      LOG_MESSAGE(LOG_LEVEL_DEBUG, "Input frame is in NV12 format\n");
-      Mat lumaImg(input[0]->props.height, input[0]->props.stride, CV_8UC1, (char *)inframe->vaddr[0]);
-      Mat chromaImg(input[0]->props.height / 2, input[0]->props.stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
+    auto starttime = std::chrono::high_resolution_clock::now();
+	  
+    Mat lumaImg(input[0]->props.height, input[0]->props.stride, CV_8UC1, (char *)inframe->vaddr[0]);
+    Mat chromaImg(input[0]->props.height / 2, input[0]->props.stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
+    Mat tcpimage;
+	  
+    convertYUVtoRGB(lumaImg, chromaImg, tcpimage);
 
-      GstInferenceMeta *infer_meta = ((GstInferenceMeta *)gst_buffer_get_meta((GstBuffer *)
-                                                                inframe->app_priv,
-                                                            gst_inference_meta_api_get_type()));
-      if (infer_meta == NULL)
-      {
-          LOG_MESSAGE(LOG_LEVEL_INFO, "vvas meta data is not available for crop");
-          return false;
-      }
-
-      GstInferencePrediction *root = infer_meta->prediction;
-
-      /* Iterate through the immediate child predictions */
-      GSList *tmp = gst_inference_prediction_get_children(root);
-      for (GSList *child_predictions = tmp;
-           child_predictions;
-           child_predictions = g_slist_next(child_predictions))
-      {
-          GstInferencePrediction *child = (GstInferencePrediction *)child_predictions->data;
-
-          /* On each children, iterate through the different associated classes */
-          for (GList *classes = child->classifications;
-               classes; classes = g_list_next(classes))
-          {
-              GstInferenceClassification *classification = (GstInferenceClassification *)classes->data;
-              if ((int64_t)child->reserved_2 != -1) 
-              {
-              DrawReID( inframe, kpriv,
-                        child->bbox.x, child->bbox.x + child->bbox.width,
-                        child->bbox.y, child->bbox.y + child->bbox.height,
-                        (uint64_t)child->reserved_1, lumaImg, chromaImg);
-              }
-          }
-      }
-      g_slist_free(tmp);
-      return 0;
+    // Kiểm tra kiểu của bgrImg
+    if (tcpimage.type() == CV_8UC3) {
+        cout << "The output image is of type CV_8UC3." << endl;
+    } else {
+        cout << "The output image is not of type CV_8UC3." << endl;
     }
-    else
-    {
-      LOG_MESSAGE(LOG_LEVEL_WARNING, "Unsupported color format\n");
-      return 0;
+
+    vvas_ms_roi roi_data;
+    parse_rect(handle, start, input, output, roi_data);
+
+    //tcp connect setting
+    int sock = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in serverAddress;
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(kpriv->port);
+    serverAddress.sin_addr.s_addr = inet_addr("192.168.4.131");
+
+    if (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) {
+        std::cerr << "Draw: Connection failed." << std::endl;
+    } else {
+        std::cout << "Draw: Connected successfully." << std::endl;
+
+        int type = tcpimage.type();
+        int rows = tcpimage.rows;
+        int cols = tcpimage.cols;
+        int channels = tcpimage.channels();
+
+        std::cout << "Type: " << type << ", Rows: " << rows << ", Cols: " << cols << ", Channels: " << channels << std::endl;
+
+        int converted_type = htonl(type);
+        int converted_rows = htonl(rows);
+        int converted_cols = htonl(cols);
+        int converted_channels = htonl(channels);
+
+        send(sock, &converted_type, sizeof(converted_type), 0);
+        send(sock, &converted_rows, sizeof(converted_rows), 0);
+        send(sock, &converted_cols, sizeof(converted_cols), 0);
+        send(sock, &converted_channels, sizeof(converted_channels), 0);
+
+        send(sock, (char*)tcpimage.data, tcpimage.total() * tcpimage.elemSize(), 0);
+        std::cout << "Sending bytes: " << tcpimage.total() * tcpimage.elemSize() << std::endl;
+
+        int bbox_count = roi_data.nobj;
+        int converted_bbox_count = htonl(bbox_count);
+        send(sock, &converted_bbox_count, sizeof(converted_bbox_count), 0);
+
+        for (uint32_t i = 0; i < roi_data.nobj; i++) {
+          uint32_t converted_x = htonl(roi_data.roi[i].x_cord);
+          uint32_t converted_y = htonl(roi_data.roi[i].y_cord);
+          uint32_t converted_width = htonl(roi_data.roi[i].width);
+          uint32_t converted_height = htonl(roi_data.roi[i].height);
+          std::cout << "x: " << roi_data.roi[i].x_cord << ", y: " << roi_data.roi[i].y_cord << ", width: " << roi_data.roi[i].width << ", height: " << roi_data.roi[i].height << std::endl;
+
+          send(sock, &converted_x, sizeof(converted_x), 0);
+          send(sock, &converted_y, sizeof(converted_y), 0);
+          send(sock, &converted_width, sizeof(converted_width), 0);
+          send(sock, &converted_height, sizeof(converted_height), 0);
+        }
     }
+  
+    close(sock);
+    auto end = std::chrono::high_resolution_clock::now();
+    // Calculate and print the elapsed time
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - starttime).count();
+    std::cout << "Time taken to send image data: " << duration << " milliseconds." << std::endl;
+	  
+      return 0;
   }
 
   int32_t xlnx_kernel_done (VVASKernel * handle)
