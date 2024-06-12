@@ -373,7 +373,7 @@ extern "C"
     struct sockaddr_in serverAddress;
     serverAddress.sin_family = AF_INET;
     serverAddress.sin_port = htons(kpriv->port);
-    serverAddress.sin_addr.s_addr = inet_addr("192.168.4.131");
+    serverAddress.sin_addr.s_addr = inet_addr("192.168.4.40");
 
     if (connect(sock, (struct sockaddr *)&serverAddress, sizeof(serverAddress)) < 0) {
         std::cerr << "Draw: Connection failed." << std::endl;
