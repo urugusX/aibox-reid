@@ -260,7 +260,8 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
   }
 
   close(sock);
-
+	
+  auto end = std::chrono::high_resolution_clock::now();
   // Calculate and print the elapsed time
   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - starttime).count();
   std::cout << "Time taken to send image data: " << duration << " milliseconds." << std::endl;
