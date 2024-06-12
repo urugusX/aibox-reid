@@ -31,6 +31,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <chrono>
 
 enum
 {
@@ -349,6 +350,8 @@ extern "C"
     VVASFrame *inframe = input[0];
     vvas_xoverlaypriv *kpriv = (vvas_xoverlaypriv *)handle->kernel_priv;
 
+    auto starttime = std::chrono::high_resolution_clock::now();
+	  
     Mat lumaImg(input[0]->props.height, input[0]->props.stride, CV_8UC1, (char *)inframe->vaddr[0]);
     Mat chromaImg(input[0]->props.height / 2, input[0]->props.stride / 2, CV_16UC1, (char *)inframe->vaddr[1]);
     Mat tcpimage;
@@ -416,6 +419,11 @@ extern "C"
     }
   
     close(sock);
+    auto end = std::chrono::high_resolution_clock::now();
+    // Calculate and print the elapsed time
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - starttime).count();
+    std::cout << "Time taken to send image data: " << duration << " milliseconds." << std::endl;
+	  
       return 0;
   }
 
