@@ -33,6 +33,8 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <chrono>
+
 
 #define MAX_REID 20
 #define DEFAULT_REID_THRESHOLD 0.2
@@ -203,6 +205,9 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
   vvas_ms_roi roi_data;
   parse_rect(handle, start, input, output, roi_data);
 
+  // Start timing here
+  auto starttime = std::chrono::high_resolution_clock::now();
+	
   //tcp connect setting
   int sock = socket(AF_INET, SOCK_STREAM, 0);
   struct sockaddr_in serverAddress;
@@ -255,40 +260,12 @@ int32_t xlnx_kernel_start(VVASKernel *handle, int start /*unused */,
   }
 
   close(sock);
-
-  m__TIC__(getfeat);
-  for (uint32_t i = 0; i < roi_data.nobj; i++) {
-    struct _roi& roi = roi_data.roi[i];
-    {
-      GstBuffer *buffer = (GstBuffer *)roi.prediction->sub_buffer; /* resized crop image*/
-      int xctr = roi.x_cord + roi.width / 2;
-      int yctr = roi.y_cord + roi.height / 2;
-      GstMapInfo info;
-      gst_buffer_map(buffer, &info, GST_MAP_READ);
-
-      GstVideoMeta *vmeta = gst_buffer_get_video_meta(buffer);
-      if (!vmeta) {
-        printf("ERROR: VVAS REID: video meta not present in buffer");
-      } else if (vmeta->width == 80 && vmeta->height == 176) {
-        char *indata = (char *)info.data;
-        cv::Mat image(vmeta->height, vmeta->width, CV_8UC3, indata);
-        m__TIC__(reidrun);
-        auto feat = kernel_priv->det->run(image).feat;
-        m__TOC__(reidrun);
-        if (kernel_priv->debug == 2) {
-            printf("Tracker input: Frame %d: obj_ind %d, xmin %u, ymin %u, xmax %u, ymax %u, prob: %f\n",
-                    frame_num, i, roi.x_cord, roi.y_cord,
-                       roi.x_cord + roi.width,
-                       roi.y_cord + roi.height, roi.prob);
-        }
-      } else {
-        printf("ERROR: VVAS REID: Invalid resolution for reid (%u x %u)\n",
-               vmeta->width, vmeta->height);
-      }
-      gst_buffer_unmap(buffer, &info);
-    }
-  }
-  m__TOC__(getfeat);
+	
+  auto end = std::chrono::high_resolution_clock::now();
+  // Calculate and print the elapsed time
+  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - starttime).count();
+  std::cout << "Time taken to send image data: " << duration << " milliseconds." << std::endl;
+	
   return 0;
 }
 
