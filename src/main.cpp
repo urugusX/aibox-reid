@@ -255,8 +255,8 @@ main (int argc, char *argv[])
 
         sprintf(pip + strlen(pip),
                 " %s \
-                ! %sparse ! queue ! omx%sdec \
-                ! video/x-raw, format=NV12 %s %s \
+                ! %sparse ! queue ! omx%sdec ! videorate \
+                ! video/x-raw, format=NV12, framerate=30/1 %s \
                 ! tee name=t%d t%d.src_0 ! queue \
                 ! vvas_xmultisrc kconfig=\"%s/ped_pp.json\" \
                 ! queue ! vvas_xfilter name=refinedet_%d kernels-config=\"%s/refinedet.json\" \
@@ -270,7 +270,7 @@ main (int argc, char *argv[])
                 ! queue %s "
                 , srcOss.str().c_str()
                 , srcenc, srcenc
-                , framerateOss.str().c_str(), queue.c_str()
+                , queue.c_str()
                 , i, i
                 , confdir.c_str()
                 , i, confdir.c_str()
